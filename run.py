@@ -30,6 +30,8 @@ parser.add_argument('-o', '--output_path', default=None,
                     help='path for storing ')
 parser.add_argument('--model', choices=['Z', 'R', 'RT', 'S'], default='Z',
                     help='which model to train')
+parser.add_argument('--regions-to-match', action='append', default=[], type=list,
+                    help='which region to regularize for similarity to')
 parser.add_argument('--times', default=5, type=int,
                     help='number of time steps to run the model (only R model)')
 parser.add_argument('--ngpus', default=0, type=int,
@@ -98,6 +100,12 @@ def train(restore_path=None,  # useful when you want to restart training
           ):
 
     model = get_model()
+    
+    for region in FLAGS.regions_to_match:
+        model.intermediate = {
+            region : Hook(model._modules[region])
+        }
+        
     trainer = ImageNetAndSimilarityTrain(model)
     validator = ImageNetVal(model)
 
@@ -358,6 +366,18 @@ class ImageNetVal(object):
 
         return record
 
+# extract intermediate representations
+class Hook():
+    def __init__(self, module, backward=False):
+        if backward==False:
+            self.hook = module.register_forward_hook(self.hook_fn)
+        else:
+            self.hook = module.register_backward_hook(self.hook_fn)
+    def hook_fn(self, module, input, output):
+        self.input = input[0]
+        self.output = output[0]
+    def close(self):
+        self.hook.remove()
 
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
