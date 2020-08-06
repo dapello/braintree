@@ -11,6 +11,7 @@ import torch.utils.model_zoo
 import torchvision
 
 import cornet
+from braintree.losses import CenteredKernelAlignment
 
 from PIL import Image
 Image.warnings.simplefilter('ignore')
@@ -97,7 +98,7 @@ def train(restore_path=None,  # useful when you want to restart training
           ):
 
     model = get_model()
-    trainer = ImageNetTrain(model)
+    trainer = ImageNetAndSimilarityTrain(model)
     validator = ImageNetVal(model)
 
     start_epoch = 0
@@ -233,21 +234,23 @@ def test(layer='decoder', sublayer='avgpool', time_step=0, imsize=224):
         np.save(os.path.join(FLAGS.output_path, fname), model_feats)
 
 
-class ImageNetTrain(object):
+class ImageNetAndSimilarityTrain(object):
 
-    def __init__(self, model):
+    def __init__(self, model, Similarity_Loss=CenteredKernelAlignment):
         self.name = 'train'
-        self.model = model
-        self.data_loader = self.data()
+        self.model = model 
+        self.data_loader = data
         self.optimizer = torch.optim.SGD(self.model.parameters(),
                                          FLAGS.lr,
                                          momentum=FLAGS.momentum,
                                          weight_decay=FLAGS.weight_decay)
         self.lr = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=FLAGS.step_size)
-        self.loss = nn.CrossEntropyLoss()
+        self.classification_loss = nn.CrossEntropyLoss()
+        self.similarity_loss = Similarity_Loss()
         if FLAGS.ngpus > 0:
             self.loss = self.loss.cuda()
-
+            
+    # need to replace this entirely
     def data(self):
         dataset = torchvision.datasets.ImageFolder(
             os.path.join(FLAGS.data_path, 'train'),
@@ -264,29 +267,48 @@ class ImageNetTrain(object):
                                                   pin_memory=True)
         return data_loader
 
-    def __call__(self, frac_epoch, inp, target):
+    def __call__(self, frac_epoch, inp, labels, target_reps={}):
         start = time.time()
 
         self.lr.step(epoch=frac_epoch)
         if FLAGS.ngpus > 0:
-            target = target.cuda(non_blocking=True)
+            labels = labels.cuda(non_blocking=True)
+            target_reps = {
+                key : target_reps[key].cuda(non_blocking=True)
+                for key in target_reps
+            }
+            
         output = self.model(inp)
 
+        # quantify classification loss
+        classification_loss = self.classification_loss(output, target)
+        
+        similarity_losses = {
+            key : self.similarity_loss(
+                self.model.intermediate[key].output,
+                target_reps[key]
+            ) 
+            for key in target_reps
+        }
+        
+        # record training data
         record = {}
-        loss = self.loss(output, target)
-        record['loss'] = loss.item()
+        record['classification_loss'] = classification_loss.item()
         record['top1'], record['top5'] = accuracy(output, target, topk=(1, 5))
         record['top1'] /= len(output)
         record['top5'] /= len(output)
         record['learning_rate'] = self.lr.get_lr()[0]
+        for key in similarity_losses:
+            record[f'{key}_loss'] = similarity_losses[key]
 
         self.optimizer.zero_grad()
-        loss.backward()
+        classification_loss.backward()
+        for key in similarity_losses:
+            similarity_losses[key].backward()
         self.optimizer.step()
 
         record['dur'] = time.time() - start
         return record
-
 
 class ImageNetVal(object):
 
