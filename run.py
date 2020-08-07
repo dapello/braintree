@@ -12,6 +12,7 @@ import torchvision
 
 import cornet
 from braintree.losses import CenteredKernelAlignment
+from braintree.data_loader import ConcatDataset, NeuralDataset
 
 from PIL import Image
 Image.warnings.simplefilter('ignore')
@@ -30,6 +31,8 @@ parser.add_argument('-o', '--output_path', default=None,
                     help='path for storing ')
 parser.add_argument('--model', choices=['Z', 'R', 'RT', 'S'], default='Z',
                     help='which model to train')
+parser.add_argument('--neuraldata', choices=['Z', 'R', 'RT', 'S'], default='Z',
+                    help='which neural dataset to load (not implemented)')
 parser.add_argument('--regions-to-match', action='append', default=[], type=list,
                     help='which region to regularize for similarity to')
 parser.add_argument('--times', default=5, type=int,
@@ -136,6 +139,8 @@ def train(restore_path=None,  # useful when you want to restart training
                }
     for epoch in tqdm.trange(0, FLAGS.epochs + 1, initial=start_epoch, desc='epoch'):
         data_load_start = np.nan
+
+        # need to adapt this to new dataloader
         for step, data in enumerate(tqdm.tqdm(trainer.data_loader, desc=trainer.name)):
             data_load_time = time.time() - data_load_start
             global_step = epoch * len(trainer.data_loader) + step
@@ -260,7 +265,7 @@ class ImageNetAndSimilarityTrain(object):
             
     # need to replace this entirely
     def data(self):
-        dataset = torchvision.datasets.ImageFolder(
+        ImageNet_Train = torchvision.datasets.ImageFolder(
             os.path.join(FLAGS.data_path, 'train'),
             torchvision.transforms.Compose([
                 torchvision.transforms.RandomResizedCrop(224),
@@ -268,13 +273,21 @@ class ImageNetAndSimilarityTrain(object):
                 torchvision.transforms.ToTensor(),
                 normalize,
             ]))
-        data_loader = torch.utils.data.DataLoader(dataset,
-                                                  batch_size=FLAGS.batch_size,
-                                                  shuffle=True,
-                                                  num_workers=FLAGS.workers,
-                                                  pin_memory=True)
+
+        data_loader = ch.utils.data.DataLoader(
+             ConcatDataset(
+                 ImageNet_Train,
+                 NeuralDataset().train
+             ),
+             batch_size=FLAGS.batch_size, 
+             shuffle=True,
+             num_workers=FLAGS.workers, 
+             pin_memory=True
+        )
+
         return data_loader
 
+    # need to adapt this to accomodate new dataloader
     def __call__(self, frac_epoch, inp, labels, target_reps={}):
         start = time.time()
 
