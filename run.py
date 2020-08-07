@@ -101,10 +101,10 @@ def train(restore_path=None,  # useful when you want to restart training
 
     model = get_model()
     
-    for region in FLAGS.regions_to_match:
-        model.intermediate = {
-            region : Hook(model._modules[region])
-        }
+    model.intermediate = {
+        region : Hook(model._modules[region])
+        for region in FLAGS.regions_to_match
+    }
         
     trainer = ImageNetAndSimilarityTrain(model)
     validator = ImageNetVal(model)
