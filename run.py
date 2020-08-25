@@ -104,11 +104,13 @@ def train(restore_path=None,  # useful when you want to restart training
 
     model = get_model()
     
+    # add hooks to extract intermediate layers, for matching to neural data
     model.intermediate = {
         region : Hook(model._modules[region])
         for region in FLAGS.regions_to_match
     }
         
+    # ImageNetAndSimilarity trains the model on imagenet and a neural similarity loss
     trainer = ImageNetAndSimilarityTrain(model)
     validator = ImageNetVal(model)
 
@@ -274,10 +276,13 @@ class ImageNetAndSimilarityTrain(object):
                 normalize,
             ]))
 
+        # neural data is already formatted for the network.
+        NeuralData_Train = NeuralDataset().train
+
         data_loader = ch.utils.data.DataLoader(
              ConcatDataset(
                  ImageNet_Train,
-                 NeuralDataset().train
+                 NeuralData_Train
              ),
              batch_size=FLAGS.batch_size, 
              shuffle=True,
@@ -287,7 +292,7 @@ class ImageNetAndSimilarityTrain(object):
 
         return data_loader
 
-    # need to adapt this to accomodate new dataloader
+    # need to adapt this to accomodate new dataloader (do we still wanna use a dict as input?)
     def __call__(self, frac_epoch, inp, labels, target_reps={}):
         start = time.time()
 
@@ -304,6 +309,7 @@ class ImageNetAndSimilarityTrain(object):
         # quantify classification loss
         classification_loss = self.classification_loss(output, target)
         
+        # and a dictionary of similarity losses (key for each network layer data pair)
         similarity_losses = {
             key : self.similarity_loss(
                 self.model.intermediate[key].output,
