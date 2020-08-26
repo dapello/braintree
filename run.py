@@ -31,6 +31,8 @@ parser.add_argument('-o', '--output_path', default=None,
                     help='path for storing ')
 parser.add_argument('--model', choices=['Z', 'R', 'RT', 'S'], default='Z',
                     help='which model to train')
+parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], default='IT',
+                    help='which CORnet layer to match')
 parser.add_argument('--neuraldata', required=True,
                     help='which neural dataset to load (not implemented)')
 parser.add_argument('--times', default=5, type=int,
@@ -104,8 +106,8 @@ def train(restore_path=None,  # useful when you want to restart training
     
     # add hooks to extract intermediate layers, for matching to neural data
     model.intermediate = {
-        region : Hook(model._modules[region])
-        for region in FLAGS.regions_to_match
+        f'region_{region}' : Hook(model._modules[region])
+        for region in FLAGS.regions
     }
         
     # ImageNetAndSimilarity trains the model on imagenet and a neural similarity loss
@@ -178,7 +180,7 @@ def train(restore_path=None,  # useful when you want to restart training
 
             if epoch < FLAGS.epochs:
                 frac_epoch = (global_step + 1) / len(trainer.data_loader)
-                record = trainer(frac_epoch, *data)
+                record = trainer(frac_epoch, data)
                 record['data_load_dur'] = data_load_time
                 results = {'meta': {'step_in_epoch': step + 1,
                                     'epoch': frac_epoch,
@@ -252,7 +254,7 @@ class ImageNetAndSimilarityTrain(object):
         self.name = 'train'
         self.model = model 
         self.neural_datapath = neural_datapath 
-        self.data_loader = self.data() 
+        self.data_loader = self.get_dataloader() 
         self.optimizer = torch.optim.SGD(self.model.parameters(),
                                          FLAGS.lr,
                                          momentum=FLAGS.momentum,
@@ -263,7 +265,7 @@ class ImageNetAndSimilarityTrain(object):
         if FLAGS.ngpus > 0:
             self.loss = self.loss.cuda()
             
-    def data(self):
+    def get_dataloader(self):
         ImageNet_Train = torchvision.datasets.ImageFolder(
             os.path.join(FLAGS.data_path, 'train'),
             torchvision.transforms.Compose([
@@ -290,29 +292,31 @@ class ImageNetAndSimilarityTrain(object):
         return data_loader
 
     # need to adapt this to accomodate new dataloader (do we still wanna use a dict as input?)
-    def __call__(self, frac_epoch, inp, labels, target_reps={}):
+    def __call__(self, frac_epoch, data):
+        ((imnet_inp, imnet_label), neural_data) = data
         start = time.time()
 
         self.lr.step(epoch=frac_epoch)
         if FLAGS.ngpus > 0:
             labels = labels.cuda(non_blocking=True)
-            target_reps = {
-                key : target_reps[key].cuda(non_blocking=True)
-                for key in target_reps
-            }
-            
-        output = self.model(inp)
+            if 'Labels' in neural_data.keys():
+                neural_data['Labels'] == neural_data['Labels'].cuda(non_blocking=True)
 
-        # quantify classification loss
-        classification_loss = self.classification_loss(output, target)
+        output = self.model(imnet_inp)
+
+        # quantify imnet classification loss
+        classification_loss = self.classification_loss(output, imnet_label)
         
-        # and a dictionary of similarity losses (key for each network layer data pair)
+        # and get stimuli loss and rep similarity loss
+        output = self.model(neural_data['Stimuli'])
+        classification_loss += self.classification_loss(output, neural_data['Labels'])
+
         similarity_losses = {
             key : self.similarity_loss(
                 self.model.intermediate[key].output,
-                target_reps[key]
+                neural_data[key]
             ) 
-            for key in target_reps
+            for key in target_reps if 'region_' in key
         }
         
         # record training data
