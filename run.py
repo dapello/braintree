@@ -12,7 +12,7 @@ import torchvision
 
 import cornet
 from braintree.losses import CenteredKernelAlignment
-from braintree.data_loader import ConcatDataset, NeuralDataset
+from braintree.data_loader import ConcatDataset, get_neural_dataset
 
 from PIL import Image
 Image.warnings.simplefilter('ignore')
@@ -31,10 +31,8 @@ parser.add_argument('-o', '--output_path', default=None,
                     help='path for storing ')
 parser.add_argument('--model', choices=['Z', 'R', 'RT', 'S'], default='Z',
                     help='which model to train')
-parser.add_argument('--neuraldata', choices=['Z', 'R', 'RT', 'S'], default='Z',
+parser.add_argument('--neuraldata', required=True,
                     help='which neural dataset to load (not implemented)')
-parser.add_argument('--regions-to-match', action='append', default=[], type=list,
-                    help='which region to regularize for similarity to')
 parser.add_argument('--times', default=5, type=int,
                     help='number of time steps to run the model (only R model)')
 parser.add_argument('--ngpus', default=0, type=int,
@@ -111,7 +109,7 @@ def train(restore_path=None,  # useful when you want to restart training
     }
         
     # ImageNetAndSimilarity trains the model on imagenet and a neural similarity loss
-    trainer = ImageNetAndSimilarityTrain(model)
+    trainer = ImageNetAndSimilarityTrain(model, args.neuraldata)
     validator = ImageNetVal(model)
 
     start_epoch = 0
@@ -250,11 +248,11 @@ def test(layer='decoder', sublayer='avgpool', time_step=0, imsize=224):
 
 
 class ImageNetAndSimilarityTrain(object):
-
-    def __init__(self, model, Similarity_Loss=CenteredKernelAlignment):
+    def __init__(self, model, neural_datapath, Similarity_Loss=CenteredKernelAlignment):
         self.name = 'train'
         self.model = model 
-        self.data_loader = data
+        self.neural_datapath = neural_datapath 
+        self.data_loader = self.data() 
         self.optimizer = torch.optim.SGD(self.model.parameters(),
                                          FLAGS.lr,
                                          momentum=FLAGS.momentum,
@@ -265,7 +263,6 @@ class ImageNetAndSimilarityTrain(object):
         if FLAGS.ngpus > 0:
             self.loss = self.loss.cuda()
             
-    # need to replace this entirely
     def data(self):
         ImageNet_Train = torchvision.datasets.ImageFolder(
             os.path.join(FLAGS.data_path, 'train'),
@@ -277,7 +274,7 @@ class ImageNetAndSimilarityTrain(object):
             ]))
 
         # neural data is already formatted for the network.
-        NeuralData_Train = NeuralDataset().train
+        NeuralData_Train, NeuralData_Test = get_neural_data(self.neural_datapath)
 
         data_loader = ch.utils.data.DataLoader(
              ConcatDataset(

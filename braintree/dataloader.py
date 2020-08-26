@@ -1,75 +1,73 @@
-import torch as ch
+import os
+
 import numpy as np
+import torch as ch
 import h5py as h5
 
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 
+def data_as_dict(datapath, partition):
+    files = np.sort([f for f in os.listdir(datapath) if partition+'.npy' in f])
+    keys = [f.split('_')[0] for f in files]
+    return {
+        key:ch.Tensor(np.load(os.path.join(datapath,file)))
+        for (key,file) in zip(keys, files) 
+    }
+
+def get_neural_dataset(datapath, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    normalize = torchvision.transforms.Normalize(
+        mean=mean,
+        std=std
+    )   
+
+    train = data_as_dict(datapath, 'Train')
+    test = data_as_dict(datapath, 'Test')
+    
+    return [
+        CustomTensorDataset(dataset, transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToPILImage(),
+            torchvision.transforms.Resize(224),
+            torchvision.transforms.ToTensor(),
+            normalize
+        ]))
+        for dataset in [train, test]
+    ]
+
+
 class CustomTensorDataset(Dataset):
     """TensorDataset with support of transforms.
+    takes and returns dictionaries of tensors like:
+    {
+        stimuli -> tensor,
+        layerkey1 -> tensor,
+        layerkey2 -> tensor,
+        ...,
+        labels -> tensor
+    }
     """
-    def __init__(self, tensors, transform=None):
-        assert all(tensors[0].size(0) == tensor.size(0) for tensor in tensors)
-        self.tensors = tensors
+    def __init__(self, tensor_dict, transform=None):
+        self.key0 = list(tensor_dict.keys())[0]
+        assert all(
+            tensor_dict[self.key0].size(0) == tensor_dict[key].size(0) 
+            for key in tensor_dict
+        )
+        self.tensor_dict = tensor_dict
         self.transform = transform
 
     def __getitem__(self, index):
-        x = self.tensors[0][index]
-
-        if self.transform:
-            x = self.transform(x)
-
-        y = self.tensors[1][index]
-        z = self.tensors[2][index]
-
-        return x, y, z
+        return {
+            key:(
+                self.transform(self.tensor_dict[key][index]) 
+                if key=='Stimuli' 
+                else self.tensor_dict[key][index]
+            )
+            for key in self.tensor_dict
+        }
 
     def __len__(self):
-        return self.tensors[0].size(0)
+        return self.tensor_dict[self.key0].size(0)
     
-class NeuralDataset(Dataset):
-    def __init__(self, datapath, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
-        self.datapath = datapath
-	self.normalize = torchvision.transforms.Normalize(
-            mean=mean,
-            std=std
-        )
-
-        partitions = ['Train', 'Test']
-        
-        name = 'Stimuli'
-        Stimuli_Partitioned = [
-            np.load(os.path.join(datapath, f'{name}_{P}.npy'))
-            for P in partitions
-        ]
-        
-        name = 'Reps'
-        Reps_Partitioned = [
-            np.load(os.path.join(datapath, f'{name}_{P}.npy'))
-            for P in partitions
-        ]
-        
-        name = 'Labels'
-        Labels_Partitioned = [
-            np.load(os.path.join(datapath, f'{name}_{P}.npy'))
-            for P in partitions
-        ]
-        
-	self.Train, self.Test = [
-	    CustomTensorDataset([
-	        ch.Tensor(Stimuli_Partitioned[i]), 
-	        ch.Tensor(Reps_Partitioned[i]), 
-	        ch.Tensor(Y_Partitioned[i])
-	    ], transform = torchvision.transforms.Compose([
-	        torchvision.transforms.ToPILImage(),
-	        torchvision.transforms.Resize(224),
-	        torchvision.transforms.ToTensor(),
-	        self.normalize
-	    ]))
-	    for i in range(len(partitions))
-	]
-
-
 # and concat the two:
 class ConcatDataset(ch.utils.data.Dataset):
     def __init__(self, *datasets):
