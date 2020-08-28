@@ -45,8 +45,10 @@ class CustomTensorDataset(Dataset):
         ...,
         labels -> tensor
     }
+
+    __getitem__ operates with any index through modulo
     """
-    def __init__(self, tensor_dict, transform=None):
+    def __init__(self, tensor_dict, transform=None, mean_fill=True):
         self.key0 = list(tensor_dict.keys())[0]
         assert all(
             tensor_dict[self.key0].size(0) == tensor_dict[key].size(0) 
@@ -54,8 +56,16 @@ class CustomTensorDataset(Dataset):
         )
         self.tensor_dict = tensor_dict
         self.transform = transform
+        if mean_fill:
+            print('filling means!')
+            mask = ch.isnan(tensor_dict['region-IT'])
+            self.tensor_dict['region-IT'][mask] = tensor_dict['region-IT'][mask==0].mean()
+
 
     def __getitem__(self, index):
+        # modulo index by length of data, so that we can any index
+        N = self.__len__()
+        index = index%N
         return {
             key:(
                 self.transform(self.tensor_dict[key][index]) 
@@ -70,6 +80,10 @@ class CustomTensorDataset(Dataset):
     
 # and concat the two:
 class ConcatDataset(ch.utils.data.Dataset):
+    """
+    takes the length as the greater of the two datasets. assumes the lesser length
+    dataset can operate with any index, ie CustomTensorDataset class above.
+    """
     def __init__(self, *datasets):
         self.datasets = datasets
 
@@ -77,4 +91,4 @@ class ConcatDataset(ch.utils.data.Dataset):
         return tuple(d[i] for d in self.datasets)
 
     def __len__(self):
-        return min(len(d) for d in self.datasets)
+        return max(len(d) for d in self.datasets)

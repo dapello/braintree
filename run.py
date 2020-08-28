@@ -12,7 +12,7 @@ import torchvision
 
 import cornet
 from braintree.losses import CenteredKernelAlignment
-from braintree.data_loader import ConcatDataset, get_neural_dataset
+from braintree.dataloader import ConcatDataset, get_neural_dataset
 
 from PIL import Image
 Image.warnings.simplefilter('ignore')
@@ -31,7 +31,7 @@ parser.add_argument('-o', '--output_path', default=None,
                     help='path for storing ')
 parser.add_argument('--model', choices=['Z', 'R', 'RT', 'S'], default='Z',
                     help='which model to train')
-parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], default='IT',
+parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], action='append', 
                     help='which CORnet layer to match')
 parser.add_argument('--neuraldata', required=True,
                     help='which neural dataset to load (not implemented)')
@@ -106,13 +106,17 @@ def train(restore_path=None,  # useful when you want to restart training
     
     # add hooks to extract intermediate layers, for matching to neural data
     model.intermediate = {
-        f'region_{region}' : Hook(model._modules[region])
+        f'region-{region}' : Hook(model._modules['module']._modules[region])
         for region in FLAGS.regions
     }
-        
+    
+    print('>>> model loaded and hooked')
+
     # ImageNetAndSimilarity trains the model on imagenet and a neural similarity loss
-    trainer = ImageNetAndSimilarityTrain(model, args.neuraldata)
+    trainer = ImageNetAndSimilarityTrain(model, FLAGS.neuraldata)
     validator = ImageNetVal(model)
+
+    print('>>> trainer and validator loaded')
 
     start_epoch = 0
     if restore_path is not None:
@@ -128,12 +132,17 @@ def train(restore_path=None,  # useful when you want to restart training
     if save_train_epochs is not None:
         save_train_steps = (np.arange(0, FLAGS.epochs + 1,
                                       save_train_epochs) * nsteps).astype(int)
+        print(f'save at steps: {save_train_steps}')
+
     if save_val_epochs is not None:
         save_val_steps = (np.arange(0, FLAGS.epochs + 1,
                                     save_val_epochs) * nsteps).astype(int)
+        print(f'save val steps: {save_val_steps}')
+
     if save_model_epochs is not None:
         save_model_steps = (np.arange(0, FLAGS.epochs + 1,
                                       save_model_epochs) * nsteps).astype(int)
+        print(f'save model steps: {save_model_steps}')
 
     results = {'meta': {'step_in_epoch': 0,
                         'epoch': start_epoch,
@@ -142,6 +151,8 @@ def train(restore_path=None,  # useful when you want to restart training
     for epoch in tqdm.trange(0, FLAGS.epochs + 1, initial=start_epoch, desc='epoch'):
         data_load_start = np.nan
 
+        print('>>> start epoch,', epoch)
+
         # need to adapt this to new dataloader
         for step, data in enumerate(tqdm.tqdm(trainer.data_loader, desc=trainer.name)):
             data_load_time = time.time() - data_load_start
@@ -149,7 +160,7 @@ def train(restore_path=None,  # useful when you want to restart training
 
             if save_val_steps is not None:
                 if global_step in save_val_steps:
-                    results[validator.name] = validator()
+                    #results[validator.name] = validator()
                     trainer.model.train()
 
             if FLAGS.output_path is not None:
@@ -189,64 +200,9 @@ def train(restore_path=None,  # useful when you want to restart training
                 if save_train_steps is not None:
                     if step in save_train_steps:
                         results[trainer.name] = record
+                        print(f'results:\n{results}')
 
             data_load_start = time.time()
-
-
-def test(layer='decoder', sublayer='avgpool', time_step=0, imsize=224):
-    """
-    Suitable for small image sets. If you have thousands of images or it is
-    taking too long to extract features, consider using
-    `torchvision.datasets.ImageFolder`, using `ImageNetVal` as an example.
-
-    Kwargs:
-        - layers (choose from: V1, V2, V4, IT, decoder)
-        - sublayer (e.g., output, conv1, avgpool)
-        - time_step (which time step to use for storing features)
-        - imsize (resize image to how many pixels, default: 224)
-    """
-    model = get_model(pretrained=True)
-    transform = torchvision.transforms.Compose([
-                    torchvision.transforms.Resize((imsize, imsize)),
-                    torchvision.transforms.ToTensor(),
-                    normalize,
-                ])
-    model.eval()
-
-    def _store_feats(layer, inp, output):
-        """An ugly but effective way of accessing intermediate model features
-        """
-        output = output.cpu().numpy()
-        _model_feats.append(np.reshape(output, (len(output), -1)))
-
-    try:
-        m = model.module
-    except:
-        m = model
-    model_layer = getattr(getattr(m, layer), sublayer)
-    model_layer.register_forward_hook(_store_feats)
-
-    model_feats = []
-    with torch.no_grad():
-        model_feats = []
-        fnames = sorted(glob.glob(os.path.join(FLAGS.data_path, '*.*')))
-        if len(fnames) == 0:
-            raise FileNotFoundError(f'No files found in {FLAGS.data_path}')
-        for fname in tqdm.tqdm(fnames):
-            try:
-                im = Image.open(fname).convert('RGB')
-            except:
-                raise FileNotFoundError(f'Unable to load {fname}')
-            im = transform(im)
-            im = im.unsqueeze(0)  # adding extra dimension for batch size of 1
-            _model_feats = []
-            model(im)
-            model_feats.append(_model_feats[time_step])
-        model_feats = np.concatenate(model_feats)
-
-    if FLAGS.output_path is not None:
-        fname = f'CORnet-{FLAGS.model}_{layer}_{sublayer}_feats.npy'
-        np.save(os.path.join(FLAGS.output_path, fname), model_feats)
 
 
 class ImageNetAndSimilarityTrain(object):
@@ -263,9 +219,12 @@ class ImageNetAndSimilarityTrain(object):
         self.classification_loss = nn.CrossEntropyLoss()
         self.similarity_loss = Similarity_Loss()
         if FLAGS.ngpus > 0:
-            self.loss = self.loss.cuda()
+            self.classification_loss = self.classification_loss.cuda()
+            self.similarity_loss = self.similarity_loss.cuda()
             
     def get_dataloader(self):
+        print('>>> getting dataloader')
+        print('>>> loading ImageNet')
         ImageNet_Train = torchvision.datasets.ImageFolder(
             os.path.join(FLAGS.data_path, 'train'),
             torchvision.transforms.Compose([
@@ -274,11 +233,13 @@ class ImageNetAndSimilarityTrain(object):
                 torchvision.transforms.ToTensor(),
                 normalize,
             ]))
+        print('>>> ImageNet loader retrieved')
 
         # neural data is already formatted for the network.
-        NeuralData_Train, NeuralData_Test = get_neural_data(self.neural_datapath)
+        NeuralData_Train, NeuralData_Test = get_neural_dataset(self.neural_datapath)
+        print('>>> NeuralData loader retrieved')
 
-        data_loader = ch.utils.data.DataLoader(
+        data_loader = torch.utils.data.DataLoader(
              ConcatDataset(
                  ImageNet_Train,
                  NeuralData_Train
@@ -288,46 +249,51 @@ class ImageNetAndSimilarityTrain(object):
              num_workers=FLAGS.workers, 
              pin_memory=True
         )
+        print('>>> full data loader retrieved')
 
         return data_loader
 
     # need to adapt this to accomodate new dataloader (do we still wanna use a dict as input?)
     def __call__(self, frac_epoch, data):
+        #print('>>> called trainer, ',frac_epoch)
         ((imnet_inp, imnet_label), neural_data) = data
+        #print(f'>>> imnet_inp shape: {imnet_inp.shape}, imnet_label shape: {imnet_label.shape}')
         start = time.time()
 
         self.lr.step(epoch=frac_epoch)
         if FLAGS.ngpus > 0:
-            labels = labels.cuda(non_blocking=True)
+            imnet_label = imnet_label.cuda(non_blocking=True)
             if 'Labels' in neural_data.keys():
-                neural_data['Labels'] == neural_data['Labels'].cuda(non_blocking=True)
+                neural_data['Labels'] = neural_data['Labels'].cuda(non_blocking=True)
 
         output = self.model(imnet_inp)
+        #print(f'>>> output shape: {output.shape}')
 
         # quantify imnet classification loss
         classification_loss = self.classification_loss(output, imnet_label)
         
-        # and get stimuli loss and rep similarity loss
         output = self.model(neural_data['Stimuli'])
-        classification_loss += self.classification_loss(output, neural_data['Labels'])
+        #classification_loss += self.classification_loss(output, neural_data['Labels'])
 
-        similarity_losses = {
-            key : self.similarity_loss(
-                self.model.intermediate[key].output,
-                neural_data[key]
-            ) 
-            for key in target_reps if 'region_' in key
-        }
         
         # record training data
         record = {}
         record['classification_loss'] = classification_loss.item()
-        record['top1'], record['top5'] = accuracy(output, target, topk=(1, 5))
+        record['top1'], record['top5'] = accuracy(output, imnet_label, topk=(1, 5))
         record['top1'] /= len(output)
         record['top5'] /= len(output)
         record['learning_rate'] = self.lr.get_lr()[0]
+
+        similarity_losses = {
+            key : self.similarity_loss(
+                self.model.intermediate[key].output,
+                neural_data[key].cuda()
+            ) 
+            for key in neural_data if 'region-' in key
+        }
+
         for key in similarity_losses:
-            record[f'{key}_loss'] = similarity_losses[key]
+            record[f'{key}_loss'] = similarity_losses[key].item()
 
         self.optimizer.zero_grad()
         classification_loss.backward()
@@ -350,7 +316,7 @@ class ImageNetVal(object):
 
     def data(self):
         dataset = torchvision.datasets.ImageFolder(
-            os.path.join(FLAGS.data_path, 'val_in_folders'),
+                os.path.join(FLAGS.data_path, 'val'),
             torchvision.transforms.Compose([
                 torchvision.transforms.Resize(256),
                 torchvision.transforms.CenterCrop(224),
@@ -394,8 +360,7 @@ class Hook():
         else:
             self.hook = module.register_backward_hook(self.hook_fn)
     def hook_fn(self, module, input, output):
-        self.input = input[0]
-        self.output = output[0]
+        self.output = output#.clone()
     def close(self):
         self.hook.remove()
 
