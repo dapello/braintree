@@ -31,6 +31,8 @@ parser.add_argument('-o', '--output_path', default=None,
                     help='path for storing ')
 parser.add_argument('--model', choices=['Z', 'R', 'RT', 'S'], default='Z',
                     help='which model to train')
+parser.add_argument('--pretrained', default=False,
+                    help='start from pretrained CORnet')
 parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], action='append', 
                     help='which CORnet layer to match')
 parser.add_argument('--neuraldata', required=True,
@@ -98,11 +100,11 @@ def get_model(pretrained=False):
 def train(restore_path=None,  # useful when you want to restart training
           save_train_epochs=.1,  # how often save output during training
           save_val_epochs=.5,  # how often save output during validation
-          save_model_epochs=5,  # how often save model weigths
+          save_model_epochs=1,  # how often save model weigths
           save_model_secs=60 * 10  # how often save model (in sec)
           ):
 
-    model = get_model()
+    model = get_model(pretrained=FLAGS.pretrained)
     
     # add hooks to extract intermediate layers, for matching to neural data
     model.intermediate = {
@@ -132,7 +134,7 @@ def train(restore_path=None,  # useful when you want to restart training
     if save_train_epochs is not None:
         save_train_steps = (np.arange(0, FLAGS.epochs + 1,
                                       save_train_epochs) * nsteps).astype(int)
-        print(f'save at steps: {save_train_steps}')
+        print(f'save train progress at steps: {save_train_steps}')
 
     if save_val_epochs is not None:
         save_val_steps = (np.arange(0, FLAGS.epochs + 1,
@@ -160,7 +162,7 @@ def train(restore_path=None,  # useful when you want to restart training
 
             if save_val_steps is not None:
                 if global_step in save_val_steps:
-                    #results[validator.name] = validator()
+                    results[validator.name] = validator()
                     trainer.model.train()
 
             if FLAGS.output_path is not None:
@@ -266,22 +268,22 @@ class ImageNetAndSimilarityTrain(object):
             if 'Labels' in neural_data.keys():
                 neural_data['Labels'] = neural_data['Labels'].cuda(non_blocking=True)
 
-        output = self.model(imnet_inp)
+        imnet_output = self.model(imnet_inp)
         #print(f'>>> output shape: {output.shape}')
 
         # quantify imnet classification loss
-        classification_loss = self.classification_loss(output, imnet_label)
+        classification_loss = self.classification_loss(imnet_output, imnet_label)
         
-        output = self.model(neural_data['Stimuli'])
+        stimuli_output = self.model(neural_data['Stimuli'])
         #classification_loss += self.classification_loss(output, neural_data['Labels'])
 
         
         # record training data
         record = {}
         record['classification_loss'] = classification_loss.item()
-        record['top1'], record['top5'] = accuracy(output, imnet_label, topk=(1, 5))
-        record['top1'] /= len(output)
-        record['top5'] /= len(output)
+        record['top1'], record['top5'] = accuracy(imnet_output, imnet_label, topk=(1, 5))
+        record['top1'] /= len(imnet_output)
+        record['top5'] /= len(imnet_output)
         record['learning_rate'] = self.lr.get_lr()[0]
 
         similarity_losses = {
@@ -349,6 +351,7 @@ class ImageNetVal(object):
         for key in record:
             record[key] /= len(self.data_loader.dataset.samples)
         record['dur'] = (time.time() - start) / len(self.data_loader)
+        print(record)
 
         return record
 

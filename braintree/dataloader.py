@@ -48,7 +48,7 @@ class CustomTensorDataset(Dataset):
 
     __getitem__ operates with any index through modulo
     """
-    def __init__(self, tensor_dict, transform=None, mean_fill=True):
+    def __init__(self, tensor_dict, transform=None, mean_fill=False):
         self.key0 = list(tensor_dict.keys())[0]
         assert all(
             tensor_dict[self.key0].size(0) == tensor_dict[key].size(0) 
@@ -60,6 +60,7 @@ class CustomTensorDataset(Dataset):
             print('filling means!')
             mask = ch.isnan(tensor_dict['region-IT'])
             self.tensor_dict['region-IT'][mask] = tensor_dict['region-IT'][mask==0].mean()
+            
 
 
     def __getitem__(self, index):
