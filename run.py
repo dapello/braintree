@@ -306,6 +306,93 @@ class ImageNetAndSimilarityTrain(object):
         record['dur'] = time.time() - start
         return record
 
+class ImageNetAndSimilarityVal(object):
+
+    def __init__(self, model):
+        self.name = 'val'
+        self.model = model
+        self.neural_datapath = neural_datapath 
+        self.data_loader = self.get_dataloader() 
+        self.classification_loss = nn.CrossEntropyLoss()
+        self.similarity_loss = Similarity_Loss()
+        #self.loss = nn.CrossEntropyLoss(size_average=False)
+        if FLAGS.ngpus > 0:
+            self.classification_loss = self.classification_loss.cuda()
+            self.similarity_loss = self.similarity_loss.cuda()
+
+    def get_dataloader(self):
+        print('>>> getting dataloader')
+        print('>>> loading ImageNet')
+        ImageNet_Val = torchvision.datasets.ImageFolder(
+                os.path.join(FLAGS.data_path, 'val'),
+            torchvision.transforms.Compose([
+                torchvision.transforms.Resize(256),
+                torchvision.transforms.CenterCrop(224),
+                torchvision.transforms.ToTensor(),
+                normalize,
+            ]))
+        print('>>> ImageNet loader retrieved')
+
+        # neural data is already formatted for the network.
+        NeuralData_Train, NeuralData_Test = get_neural_dataset(self.neural_datapath)
+        print('>>> NeuralData loader retrieved')
+
+        data_loader = torch.utils.data.DataLoader(
+             ConcatDataset(
+                 ImageNet_Val
+                 NeuralData_Test
+             ),
+             batch_size=FLAGS.batch_size, 
+             shuffle=False,
+             num_workers=FLAGS.workers, 
+             pin_memory=True
+        )
+        print('>>> full data loader retrieved')
+
+        return data_loader
+
+    def __call__(self):
+        self.model.eval()
+        start = time.time()
+        record = {'loss': 0, 'top1': 0, 'top5': 0}
+        with torch.no_grad():
+            for data in tqdm.tqdm(self.data_loader, desc=self.name):
+                ((imnet_inp, imnet_label), neural_data) = data
+                if FLAGS.ngpus > 0:
+                    imnet_label = imnet_label.cuda(non_blocking=True)
+                    if 'Labels' in neural_data.keys():
+                        neural_data['Labels'] = neural_data['Labels'].cuda(non_blocking=True)
+
+                imnet_output = self.model(imnet_inp)
+
+                # quantify imnet classification loss
+                classification_loss = self.classification_loss(imnet_output, imnet_label)
+                record['loss'] += classification_loss.item()
+                p1, p5 = accuracy(imnet_output, imnet_label, topk=(1, 5))
+                record['top1'] += p1
+                record['top5'] += p5
+                
+                stimuli_output = self.model(neural_data['Stimuli'])
+
+                similarity_losses = {
+                    key : self.similarity_loss(
+                        self.model.intermediate[key].output,
+                        neural_data[key].cuda()
+                    ) 
+                    for key in neural_data if 'region-' in key
+                }
+                
+                for key in similarity_losses:
+                    record[f'{key}_loss'] += similarity_losses[key].item()
+
+        for key in record:
+            record[key] /= len(self.data_loader.dataset.samples)
+
+        record['dur'] = (time.time() - start) / len(self.data_loader)
+        print(record)
+
+        return record
+
 class ImageNetVal(object):
 
     def __init__(self, model):
