@@ -98,9 +98,9 @@ def get_model(pretrained=False):
 
 
 def train(restore_path=None,  # useful when you want to restart training
-          save_train_epochs=.1,  # how often save output during training
-          save_val_epochs=.5,  # how often save output during validation
-          save_model_epochs=1,  # how often save model weigths
+          save_train_epochs=.01,  # how often save output during training
+          save_val_epochs=.01,  # how often save output during validation
+          save_model_epochs=.01,  # how often save model weigths
           save_model_secs=60 * 10  # how often save model (in sec)
           ):
 
@@ -116,7 +116,7 @@ def train(restore_path=None,  # useful when you want to restart training
 
     # ImageNetAndSimilarity trains the model on imagenet and a neural similarity loss
     trainer = ImageNetAndSimilarityTrain(model, FLAGS.neuraldata)
-    validator = ImageNetVal(model)
+    validator = ImageNetAndSimilarityVal(model, FLAGS.neuraldata)
 
     print('>>> trainer and validator loaded')
 
@@ -155,7 +155,6 @@ def train(restore_path=None,  # useful when you want to restart training
 
         print('>>> start epoch,', epoch)
 
-        # need to adapt this to new dataloader
         for step, data in enumerate(tqdm.tqdm(trainer.data_loader, desc=trainer.name)):
             data_load_time = time.time() - data_load_start
             global_step = epoch * len(trainer.data_loader) + step
@@ -185,7 +184,8 @@ def train(restore_path=None,  # useful when you want to restart training
                 if save_model_steps is not None:
                     if global_step in save_model_steps:
                         torch.save(ckpt_data, os.path.join(FLAGS.output_path,
-                                                           f'epoch_{epoch:02d}.pth.tar'))
+                                                           f'epoch_{global_step}.pth.tar'))
+                                                           #f'epoch_{epoch:02d}.pth.tar'))
 
             else:
                 if len(results) > 1:
@@ -307,8 +307,7 @@ class ImageNetAndSimilarityTrain(object):
         return record
 
 class ImageNetAndSimilarityVal(object):
-
-    def __init__(self, model):
+    def __init__(self, model, neural_datapath, Similarity_Loss=CenteredKernelAlignment):
         self.name = 'val'
         self.model = model
         self.neural_datapath = neural_datapath 
@@ -339,7 +338,7 @@ class ImageNetAndSimilarityVal(object):
 
         data_loader = torch.utils.data.DataLoader(
              ConcatDataset(
-                 ImageNet_Val
+                 ImageNet_Val,
                  NeuralData_Test
              ),
              batch_size=FLAGS.batch_size, 
@@ -383,10 +382,16 @@ class ImageNetAndSimilarityVal(object):
                 }
                 
                 for key in similarity_losses:
-                    record[f'{key}_loss'] += similarity_losses[key].item()
+                    if f'{key}_loss' not in record:
+                        record[f'{key}_loss'] = similarity_losses[key].item()
+                    else:
+                        record[f'{key}_loss'] += similarity_losses[key].item()
 
         for key in record:
-            record[key] /= len(self.data_loader.dataset.samples)
+            if 'loss' in key:
+                record[key] /= len(self.data_loader)
+            else:
+                record[key] /= self.data_loader.dataset.__len__()
 
         record['dur'] = (time.time() - start) / len(self.data_loader)
         print(record)
