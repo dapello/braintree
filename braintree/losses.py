@@ -19,3 +19,29 @@ def CKA_(X: Tensor, Y: Tensor) -> Tensor:
 
 def frobdot(X: Tensor, Y: Tensor) -> Tensor:
     return torch.norm(torch.matmul(Y.t(), X), p='fro')
+
+# alternate implementation:
+def centering(K):
+    n = K.shape[0]
+    unit = torch.ones([n, n])
+    I = torch.eye(n)
+    H = I - unit / n
+
+    return torch.dot(torch.dot(H, K), H)
+    # HKH are the same with KH, KH is the first centering, H(KH) do the second time,
+    # results are the sme with one time centering
+    # return np.dot(H, K)  # KH
+
+
+def linear_HSIC(X, Y):
+    L_X = torch.dot(X, X.T)
+    L_Y = torch.dot(Y, Y.T)
+    return torch.sum(centering(L_X) * centering(L_Y))
+
+
+def linear_CKA(X, Y):
+    hsic = linear_HSIC(X, Y)
+    var1 = torch.sqrt(linear_HSIC(X, X))
+    var2 = torch.sqrt(linear_HSIC(Y, Y))
+
+    return hsic / (var1 * var2)

@@ -1,5 +1,8 @@
 from .imagenet_datamodule import ImagenetDataModule
+from .neural_datamodule import NeuralDataModule, ImageNetAndNeuralDataModule
 
 DATAMODULES = {
-    'imagenet': ImagenetDataModule
+    'ImageNet' : ImagenetDataModule,
+    'NeuralData' : NeuralDataModule,
+    'ImageNetAndNeuralData' : ImageNetAndNeuralDataModule
 }
