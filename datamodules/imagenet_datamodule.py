@@ -16,6 +16,9 @@ from .wrapper import Wrapper
 default_Imagenet_dir = '/om/data/public/imagenet/images_complete/ilsvrc/'
 
 class ImagenetDataModule(LightningDataModule):
+
+    name='ImageNet'
+
     def __init__(
         self,
         hparams,
@@ -25,7 +28,6 @@ class ImagenetDataModule(LightningDataModule):
         super().__init__(*args, **kwargs)
 
         self.hparams = hparams
-        self.name = hparams.datamodule
         self.image_size = hparams.image_size
         self.dims = (3, self.image_size, self.image_size)
         self.data_dir = default_Imagenet_dir
@@ -37,7 +39,7 @@ class ImagenetDataModule(LightningDataModule):
         dir = os.path.join(self.data_dir, type_)
         dataset = datasets.ImageFolder(dir, transforms)
         dataset.name = self.name
-        return Wrapper(dataset)
+        return dataset
 
     def _get_DataLoader(self, *args, **kwargs):
         return DataLoader(*args, **kwargs)
@@ -47,7 +49,7 @@ class ImagenetDataModule(LightningDataModule):
         dataset = self._get_dataset('train', transforms)
 
         loader = self._get_DataLoader(
-            dataset,
+            Wrapper(dataset),
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,

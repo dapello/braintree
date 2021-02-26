@@ -83,15 +83,18 @@ class Model_Lightning(LightningModule):
 
     def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
         losses = []
+        # tried to do this in the Wrapper but for some reason it didn't play well. must investigate.
+        batch = {batch_[0][0] : batch_[1] for batch_ in batch}
         if 'ImageNet' in batch.keys():
             losses.append(
                 self.classification(batch['ImageNet'], mode)
             )
 
+        batch['IT'] = batch['NeuralData']
         for region in self.hparams.regions:
             if region in batch.keys():
                 losses.append(
-                    self.dissimilarity(batch[region], region, mode)
+                    self.similarity(batch[region], region, mode)
                 )
 
         return sum(losses)
@@ -119,7 +122,7 @@ class Model_Lightning(LightningModule):
         Y_hat = self.regions[region].output
         loss = self.neural_loss(Y, Y_hat)
         log = {
-            f'{mode}_{self.dissimilarity_loss.name}' : loss
+            f'{mode}_{self.neural_loss.name}' : loss
         }
         self.log_dict(log, on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
@@ -180,7 +183,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--neural_loss', default='CKA', choices=cls.neural_losses.keys(), type=str)
         parser.add_argument('--image_size', default=224, type=int)
         parser.add_argument('--epochs', default=100, type=int, metavar='N')
-        parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 256, 
+        parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 96, 
                             help='this is the total batch size of all GPUs on the current node when '
                                  'using Data Parallel or Distributed Data Parallel')
         parser.add_argument('--scheduler', type=str, default='ExponentialLR')

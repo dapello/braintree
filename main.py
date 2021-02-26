@@ -51,7 +51,6 @@ def get_args(*args):
     parent_parser.add_argument('--seed', type=int, default=42,
                                 help='seed for initializing training. ')
     parent_parser.add_argument('--save-path', metavar='DIR', type=str, default=default_save_path,  help='path to save output')
-    parent_parser.add_argument('--private', dest='save_path', action='store_false')
     parent_parser.add_argument('--num_workers', type=int, default=16,
                                help='how many workers')
     parent_parser.add_argument('--num_nodes', type=int, default=1,
@@ -66,7 +65,7 @@ def get_args(*args):
                                help='evaluate model on validation set')
 
     # data specific arguments. maybe move to DATAMODULES like MODELS?
-    parent_parser.add_argument('-d', '--datamodule', dest='datamodule', type=str, default='ImageNetAndNeuralData', 
+    parent_parser.add_argument('-d', '--datamodule', dest='datamodule', default='ImageNetAndNeuralData', 
         choices=DATAMODULES.keys(), help='which datamodule to use.')
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
         choices=SOURCES.keys(), help='which source neural dataset to construct from')
@@ -79,8 +78,8 @@ def get_args(*args):
         help='how many stimuli to fit to')
     parent_parser.add_argument('-t', '--trials', dest='trials', default='All',
         help='how many trials of stimuli presentation to average over')
-    parent_parser.add_argument('--window', default='70t170',
-        help='time window to average neural data over')
+    parent_parser.add_argument('--window', default='7t17',
+        help='time window to average neural data over. 7t17 => 70ms through 170ms')
 
     parser = MODEL.add_model_specific_args(parent_parser)
     args, unknown = parser.parse_known_args(*args) 

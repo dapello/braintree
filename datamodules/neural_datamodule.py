@@ -14,6 +14,7 @@ from .normalization import imagenet_normalization
 from .wrapper import Wrapper
 
 class ImageNetAndNeuralDataModule(LightningDataModule):
+    name = 'ImageNetAndNeuralData'
     """
     merges both ImageNet loader and the NeuralData loader below through
     Wrapper. Wrapper returns batches inside a dictionary, with dataset name 
@@ -28,7 +29,6 @@ class ImageNetAndNeuralDataModule(LightningDataModule):
         super().__init__(*args, **kwargs)
 
         self.hparams = hparams
-        self.name = hparams.datamodule
         self.num_workers = hparams.num_workers
         self.batch_size = hparams.batch_size
         self.ImageNet = ImagenetDataModule(hparams)
@@ -67,6 +67,7 @@ class ImageNetAndNeuralDataModule(LightningDataModule):
         return loader
         
 class NeuralDataModule(LightningDataModule):
+    name = 'NeuralData'
     """
     A DataLoader for neural data. uses a dataconstructer class (KKTemporal) to
     format neural data, formats it and then returns it wrapped in a dictionary 
@@ -81,7 +82,6 @@ class NeuralDataModule(LightningDataModule):
         super().__init__(*args, **kwargs)
 
         self.hparams = hparams
-        self.name = hparams.datamodule
         self.image_size = hparams.image_size
         self.dims = (3, self.image_size, self.image_size)
         self.num_workers = hparams.num_workers
@@ -94,8 +94,7 @@ class NeuralDataModule(LightningDataModule):
         Y = self.constructor.get_neural_responses()[type_]
         dataset = CustomTensorDataset(X, Y, transforms)
         dataset.name = self.name
-        import pdb; pdb.set_trace()
-        return Wrapper(dataset)
+        return dataset
 
     def _get_DataLoader(self, *args, **kwargs):
         return DataLoader(*args, **kwargs)
@@ -108,7 +107,7 @@ class NeuralDataModule(LightningDataModule):
         dataset = self._get_dataset('train', transforms)
 
         loader = self._get_DataLoader(
-            dataset,
+            Wrapper(dataset),
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
@@ -175,8 +174,8 @@ class CustomTensorDataset(Dataset):
         index = index%N
         
         X = self.transform(self.X[index])
-        Y = self.Y
-        return tuple(X,Y)
+        Y = self.Y[index]
+        return (X,Y)
 
     def __len__(self):
         return self.X.size(0)
@@ -218,11 +217,7 @@ class KKTemporalDataConstructer(object):
             for animal in self.animals
         ], axis=1)
 
-        if self.verbose:
-            print(
-                f'{self.animals} shape:\n\
-                (stimuli, sites) : {X.shape}'
-            )
+        if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
         
         X_Partitioned = self.partition(X)
         X_Partitioned['train'] = X_Partitioned['train'][:self.n_fit_images]
@@ -235,8 +230,7 @@ class KKTemporalDataConstructer(object):
 
         if self.verbose:
             print(
-                f'{animal} {region} shape:\n\
-                (timestep, stimuli, sites, trials) : {X.shape}'
+                f'{animal} {region} shape:\n(timestep, stimuli, sites, trials) : {X.shape}'
             )
 
         # get mean over time window
@@ -244,10 +238,7 @@ class KKTemporalDataConstructer(object):
         X = np.nanmean(X[start:stop], axis=0)
 
         if self.verbose:
-            print(
-                f'{animal} {region} shape:\n\
-                (stimuli, sites, trials) : {X.shape}'
-            )
+            print(f'(stimuli, sites, trials) : {X.shape}')
 
         """
         get subset of neurons to fit/test on. 
@@ -258,10 +249,7 @@ class KKTemporalDataConstructer(object):
         X = X[:, :self.n_fit_neurons, :]
 
         if self.verbose:
-            print(
-                f'{animal} {region} shape:\n\
-                (stimuli, sites, trials) : {X.shape}'
-            )
+            print(f'(stimuli, sites, trials) : {X.shape}')
 
         # take mean over trials
         if self.n_trials!='All':
@@ -269,11 +257,9 @@ class KKTemporalDataConstructer(object):
         X = np.nanmean(X, axis=2)
 
         if self.verbose:
-            print(
-                f'{animal} {region} shape:\n\
-                (stimuli, sites) : {X.shape}'
-            )
+            print(f'(stimuli, sites) : {X.shape}')
 
+        assert ~np.isnan(np.sum(X))
         return X
     
     @staticmethod

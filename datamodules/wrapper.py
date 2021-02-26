@@ -12,7 +12,9 @@ class Wrapper(Dataset):
 
     def __getitem__(self, i):
         #return tuple(d[i] for d in self.datasets)
-        return {d.name : d[i] for d in self.datasets}
+        #data = {d.name : d[i] for d in self.datasets}
+        data = tuple((d.name, d[i]) for d in self.datasets)
+        return data
 
     def __len__(self):
         # return max length. requires input datasets to use modulo __getitem__

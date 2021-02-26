@@ -4,6 +4,9 @@ from torch.nn import Module
 
 
 class LogCenteredKernelAlignment(Module):
+
+    name = 'logCKA'
+
     def __init__(self):
         super(LogCenteredKernelAlignment, self).__init__()
         self.CKA = CenteredKernelAlignment() 
@@ -12,6 +15,9 @@ class LogCenteredKernelAlignment(Module):
         return ch.log(CKA(X,Y))
 
 class CenteredKernelAlignment(Module):
+
+    name = 'CKA'
+
     def __init__(self):
         super(CenteredKernelAlignment, self).__init__()
             
@@ -20,15 +26,13 @@ class CenteredKernelAlignment(Module):
         X, Y = X.view(X.shape[0], -1), Y.view(Y.shape[0], -1)
         X = X - X.mean(dim=0)
         Y = Y - Y.mean(dim=0)
-        return 1 - self.CKA(X, Y)
+        return 1 - CKA(X, Y)
     
-    @staticmethod
-    def CKA(X: Tensor, Y: Tensor) -> Tensor:
-        return self.frobdot(X,Y)**2 / (self.frobdot(X,X)*self.frobdot(Y,Y))
+def CKA(X: Tensor, Y: Tensor) -> Tensor:
+    return frobdot(X,Y)**2 / (frobdot(X,X)*frobdot(Y,Y))
 
-    @staticmethod
-    def frobdot(X: Tensor, Y: Tensor) -> Tensor:
-        return ch.norm(ch.matmul(Y.t(), X), p='fro')
+def frobdot(X: Tensor, Y: Tensor) -> Tensor:
+    return ch.norm(ch.matmul(Y.t(), X), p='fro')
 
 # alternate implementation:
 def centering(K):
