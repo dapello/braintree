@@ -11,7 +11,7 @@ import torch.optim.lr_scheduler as lr_scheduler
 
 import pytorch_lightning as pl
 from pytorch_lightning.core import LightningModule
-from braintree.losses import CenteredKernelAlignment
+from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 
 ########### Network Models ##############
 
@@ -27,20 +27,13 @@ MODEL_NAMES = sorted(
 
 ###########
 
-def get_model(arch, pretrained, *args, **kwargs): 
-    model_arch = models_dict[arch]
-    # remove kwargs for torchvision_models
-    kwargs = dict_remove_none(kwargs) if arch in custom_models.__dict__ else {} 
-    model = model_arch(pretrained=pretrained, *args, **kwargs)      
-    return model
-
-def dict_remove_none(kwargs):
-    return {k: v for k, v in kwargs.items() if v is not None}
-
-###########
-
 class Model_Lightning(LightningModule):
     
+    neural_losses = {
+        'CKA' : CenteredKernelAlignment,
+        'logCKA' : LogCenteredKernelAlignment
+    }
+
     def __init__(self, hparams, *args, **kwargs): 
         super().__init__()
         
@@ -51,9 +44,9 @@ class Model_Lightning(LightningModule):
         self.hparams = hparams
         self.record_time = hparams.record_time
         
-        self.model = get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
+        self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.regions = self.hook_layers()
-        self.dissimilarity_loss = CenteredKernelAlignment()
+        self.neural_loss = self.neural_losses[hparams.neural_loss]()
 
         print('record_time = ', self.record_time)
         
@@ -65,6 +58,7 @@ class Model_Lightning(LightningModule):
         need to make a more generic layer committer here; this assumes layers in the net are
         named after brain regions like CORnets
         """
+        if self.hparams.verbose: print(f'Hooking regions {self.hparams.regions}')
         layer_hooks = {
             f'{region}' : Hook(self.model._modules['module']._modules[region])
             for region in self.hparams.regions
@@ -82,35 +76,28 @@ class Model_Lightning(LightningModule):
         for region in self.hparams.regions:
             if region in batch.keys():
                 losses.append(
-                    self.dissimilarity(batch[region], region, 'train')
+                    self.similarity(batch[region], region, 'train')
                 )
         # is this really working?
         return sum(losses)
 
-    def dissimilarity(self, batch, region, mode):
-        X, Y = batch
-        _ = self.model(X)
-        Y_hat = self.regions[region].output
-        loss = self.dissimilarity_loss(Y, Y_hat)
-        log = {
-            f'{mode}_{self.dissimilarity_loss.name}' : loss
-        }
-        self.log_dict(log, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-
-    def validation_step(self, batch, batch_idx, dataloader_idx):
+    def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
         losses = []
         if 'ImageNet' in batch.keys():
             losses.append(
-                self.classification(batch['ImageNet'], 'val')
+                self.classification(batch['ImageNet'], mode)
             )
 
         for region in self.hparams.regions:
             if region in batch.keys():
                 losses.append(
-                    self.dissimilarity(batch[region], region, 'val')
+                    self.dissimilarity(batch[region], region, mode)
                 )
 
         return sum(losses)
+
+    def test_step(self, batch, batch_idx, dataloader_idx=None):
+        return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
 
     def classification(self, batch, mode):
         X, Y = batch
@@ -126,8 +113,20 @@ class Model_Lightning(LightningModule):
 
         return loss
 
+    def similarity(self, batch, region, mode):
+        X, Y = batch
+        _ = self.model(X)
+        Y_hat = self.regions[region].output
+        loss = self.neural_loss(Y, Y_hat)
+        log = {
+            f'{mode}_{self.dissimilarity_loss.name}' : loss
+        }
+        self.log_dict(log, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
+        return loss
+
     def configure_optimizers(self):
-        param_list, lr =  self.parameters(), self.hparams.lr
+        param_list, lr = self.parameters(), self.hparams.lr
         lr_list = lr
         
         optimizer = optim.SGD(
@@ -147,23 +146,38 @@ class Model_Lightning(LightningModule):
         return [optimizer], [scheduler]
 
     @staticmethod
-    def accuracy(output, target, topk=(1,)):
+    def __accuracy(output, target, topk=(1,)):
         """Computes the precision@k for the specified values of k"""
         with torch.no_grad():
             _, pred = output.topk(max(topk), dim=1, largest=True, sorted=True)
             pred = pred.t()
             correct = pred.eq(target.view(1, -1).expand_as(pred))
-            res = [correct[:k].sum().item() for k in topk]
+            total = output.shape[0]
+            res = [correct[:k].sum().item()/total for k in topk]
             return res
 
     @staticmethod
-    def add_model_specific_args(parent_parser):  
+    def get_model(arch, pretrained, *args, **kwargs): 
+        
+        def dict_remove_none(kwargs):
+            return {k: v for k, v in kwargs.items() if v is not None}
+
+        model_arch = models_dict[arch]
+        # remove kwargs for torchvision_models
+        kwargs = dict_remove_none(kwargs) if arch in custom_models.__dict__ else {} 
+        print(f'Using pretrained model: {pretrained}')
+        model = model_arch(pretrained=pretrained, *args, **kwargs)      
+        return model
+
+    @classmethod
+    def add_model_specific_args(cls, parent_parser):  
         parser = argparse.ArgumentParser(parents=[parent_parser])
         parser.add_argument('--v_num', type=int)
-        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'CORnet-S', 
+        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'cornet_s', 
                             help='model architecture: ' + ' | '.join(MODEL_NAMES))
-        parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], action='append', 
+        parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')
+        parser.add_argument('--neural_loss', default='CKA', choices=cls.neural_losses.keys(), type=str)
         parser.add_argument('--image_size', default=224, type=int)
         parser.add_argument('--epochs', default=100, type=int, metavar='N')
         parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 256, 
@@ -178,7 +192,7 @@ class Model_Lightning(LightningModule):
         # change to step LR
         parser.add_argument('--wd', '--weight-decay', metavar='W', dest='weight_decay', type=float, default = 1e-4)  # set to 1e-2 for cifar10
         parser.add_argument('--optim', dest='optim', default='sgd') # := {'sgd'}
-        parser.add_argument('--pretrained', dest='pretrained', action='store_true', default = False)
+        parser.add_argument('--pretrained', dest='pretrained', action='store_true', default = True)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser

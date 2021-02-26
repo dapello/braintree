@@ -14,25 +14,30 @@ from .normalization import imagenet_normalization
 from .wrapper import Wrapper
 
 class ImageNetAndNeuralDataModule(LightningDataModule):
+    """
+    merges both ImageNet loader and the NeuralData loader below through
+    Wrapper. Wrapper returns batches inside a dictionary, with dataset name 
+    as the key.
+    """
     def __init__(
         self, 
         hparams,
         *args,
-        **kwargs,
+        **kwargs
     ):
         super().__init__(*args, **kwargs)
 
         self.hparams = hparams
-        self.name = hparams.name
+        self.name = hparams.datamodule
         self.num_workers = hparams.num_workers
         self.batch_size = hparams.batch_size
-        self.Imagenet = ImagenetDataModule(hparams)
-        self.Neuraldata = NeuralDataModule(hparams)
+        self.ImageNet = ImagenetDataModule(hparams)
+        self.NeuralData = NeuralDataModule(hparams)
 
     def train_dataloader(self):
         dataset = Wrapper(
-            self.ImageNet._get_dataset('train', self.ImageNet.train_transforms()),
-            self.Neuraldata._get_dataset('train', self.ImageNet.train_transforms())
+            self.ImageNet._get_dataset('train', self.ImageNet.train_transform()),
+            self.NeuralData._get_dataset('train', self.NeuralData.train_transform())
         )
 
         loader = DataLoader(
@@ -45,16 +50,16 @@ class ImageNetAndNeuralDataModule(LightningDataModule):
 
         return loader
 
-    def test_dataloader(self):
+    def val_dataloader(self):
         dataset = Wrapper(
-            self.ImageNet._get_dataset('test', self.ImageNet.test_transforms()),
-            self.Neuraldata._get_dataset('test', self.ImageNet.test_transforms())
+            self.ImageNet._get_dataset('val', self.ImageNet.val_transform()),
+            self.NeuralData._get_dataset('val', self.NeuralData.val_transform())
         )
 
         loader = DataLoader(
             dataset,
             batch_size=self.batch_size,
-            shuffle=True,
+            shuffle=False,
             num_workers=self.num_workers,
             pin_memory=True
         )
@@ -62,21 +67,26 @@ class ImageNetAndNeuralDataModule(LightningDataModule):
         return loader
         
 class NeuralDataModule(LightningDataModule):
+    """
+    A DataLoader for neural data. uses a dataconstructer class (KKTemporal) to
+    format neural data, formats it and then returns it wrapped in a dictionary 
+    through Wrapper
+    """
     def __init__(
         self, 
         hparams,
         *args,
-        **kwargs,
+        **kwargs
     ):
         super().__init__(*args, **kwargs)
 
         self.hparams = hparams
-        self.name = hparams.name
+        self.name = hparams.datamodule
         self.image_size = hparams.image_size
         self.dims = (3, self.image_size, self.image_size)
         self.num_workers = hparams.num_workers
         self.batch_size = hparams.batch_size
-        self.constructor = SOURCES[hparams['neuraldataset']](hparams)
+        self.constructor = SOURCES[hparams.neuraldataset](hparams)
 
     def _get_dataset(self, type_, transforms):
         # construct data here
@@ -84,6 +94,7 @@ class NeuralDataModule(LightningDataModule):
         Y = self.constructor.get_neural_responses()[type_]
         dataset = CustomTensorDataset(X, Y, transforms)
         dataset.name = self.name
+        import pdb; pdb.set_trace()
         return Wrapper(dataset)
 
     def _get_DataLoader(self, *args, **kwargs):
@@ -179,14 +190,14 @@ class KKTemporalDataConstructer(object):
     ):
         super().__init__(*args, **kwargs)
         self.hparams = hparams
-        self.data = h5.File('kk_temporal_data.h5', 'r')
+        self.data = h5.File('/om2/user/dapello/neural_data/kk_temporal_data.h5', 'r')
         self.partition = Partition(*partition_scheme)
         self.regions = hparams.regions
-        self.animals = hparams.animals
+        self.animals = self.expand(hparams.animals)
         self.n_fit_images = int(1e10) if hparams.stimuli=='All' else hparams.stimuli
         self.n_fit_neurons = int(1e10) if hparams.neurons=='All' else hparams.neurons
         self.n_trials = int(1e10) if hparams.trials=='All' else hparams.trials
-        self.n_heldout_neurons=50, 
+        self.n_heldout_neurons=50 
         self.window = int(1e10) if hparams.window=='All' else hparams.window
         self.return_heldout=0
         self.verbose = hparams.verbose
@@ -265,6 +276,12 @@ class KKTemporalDataConstructer(object):
 
         return X
     
+    @staticmethod
+    def expand(animals):
+        if animals[0] == 'All':
+            animals = ['nano.right', 'nano.left', 'magneto.right']
+        return animals
+
     @staticmethod
     def partition_neurons(X, ntrain):
         np.random.seed(0)

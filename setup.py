@@ -7,33 +7,34 @@ with open('README.md') as readme_file:
     readme = readme_file.read()
 
 requirements = [
-    "torch>=0.4.0+",
+    "pytorch-lightning==1.1.8",
+    "torch==1.7.1",
     "torchvision",
     "numpy",
     "pandas",
-    "tqdm",
-    "fire",
+    "h5py",
+    "cornet @ git+https://github.com/dicarlolab/CORnet",
+    #"vonenet @ git+https://github.com/dicarlolab/vonenet"
 ]
 
 setup(
-    name='CORnet',
-    version='0.1.0',
-    description="Modeling the Neural Mechanisms of Core Object Recognition ",
+    name='braintree',
+    version='0.2.0',
+    description="Modeling the Neural Mechanisms of Core Object Recognition",
     long_description=readme,
-    author="Jonas Kubilius, Martin Schrimpf",
-    author_email='qbilius@mit.edu, msch@mit.edu',
-    url='https://github.com/dicarlolab/CORnet',
-    packages=['cornet'],
+    author="Joel Dapello, Ko Kar",
+    author_email='dapello@mit.edu, kohitij@mit.edu',
+    url='https://github.com/dapello/braintree',
+    packages=['braintree'],
     include_package_data=True,
     install_requires=requirements,
     license="GNU GPL v3",
     zip_safe=False,
-    keywords='CORnet Brain-Score',
+    keywords='braintree Brain-Score',
     classifiers=[
-        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: GNU GPL v3',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3.6'
+        'Programming Language :: Python :: 3.7'
     ],
 )

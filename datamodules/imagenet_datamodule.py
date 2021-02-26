@@ -12,28 +12,26 @@ from .normalization import imagenet_normalization
 from torch.utils.data.distributed import DistributedSampler
 from .wrapper import Wrapper
 
-default_Imagenet_dir = '/data/ImageNet/ILSVRC2012'
+#default_Imagenet_dir = '/data/ImageNet/ILSVRC2012'
+default_Imagenet_dir = '/om/data/public/imagenet/images_complete/ilsvrc/'
 
 class ImagenetDataModule(LightningDataModule):
     def __init__(
         self,
-        name: str = 'ImageNet',
-        data_dir: str = None,
-        meta_dir: str = None,
-        image_size: int = 224,
-        num_workers: int = 16,
-        batch_size: int = 256,
+        hparams,
         *args,
-        **kwargs,
+        **kwargs
     ):
         super().__init__(*args, **kwargs)
 
-        self.image_size = image_size
+        self.hparams = hparams
+        self.name = hparams.datamodule
+        self.image_size = hparams.image_size
         self.dims = (3, self.image_size, self.image_size)
-        self.data_dir = data_dir or default_Imagenet_dir
-        self.meta_dir = meta_dir
-        self.num_workers = num_workers
-        self.batch_size = batch_size
+        self.data_dir = default_Imagenet_dir
+        self.meta_dir = None
+        self.num_workers = hparams.num_workers
+        self.batch_size = hparams.batch_size
 
     def _get_dataset(self, type_, transforms):
         dir = os.path.join(self.data_dir, type_)
@@ -45,7 +43,7 @@ class ImagenetDataModule(LightningDataModule):
         return DataLoader(*args, **kwargs)
 
     def train_dataloader(self):
-        transforms = self.train_transforms or self.train_transform() 
+        transforms = self.train_transform() 
         dataset = self._get_dataset('train', transforms)
 
         loader = self._get_DataLoader(
@@ -63,7 +61,7 @@ class ImagenetDataModule(LightningDataModule):
         Uses the validation split of imagenet2012 for testing
         """
         transforms = self.val_transform()
-        dataset = self._get_dataset('test', transforms)
+        dataset = self._get_dataset('val', transforms)
         loader = self._get_DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -88,7 +86,9 @@ class ImagenetDataModule(LightningDataModule):
         return preprocessing
 
     def val_transform(self):
-        """       The standard imagenet transforms for validation      """
+        """
+        The standard imagenet transforms for validation
+        """
         preprocessing = transform_lib.Compose([
             transform_lib.Resize(self.image_size + 32),
             transform_lib.CenterCrop(self.image_size),
