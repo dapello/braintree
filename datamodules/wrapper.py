@@ -18,4 +18,5 @@ class Wrapper(Dataset):
 
     def __len__(self):
         # return max length. requires input datasets to use modulo __getitem__
-        return max(len(d) for d in self.datasets)
+        #return max(len(d) for d in self.datasets)
+        return min(len(d) for d in self.datasets)

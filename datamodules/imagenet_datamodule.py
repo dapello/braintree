@@ -65,7 +65,7 @@ class ImagenetDataModule(LightningDataModule):
         transforms = self.val_transform()
         dataset = self._get_dataset('val', transforms)
         loader = self._get_DataLoader(
-            dataset,
+            Wrapper(dataset),
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,

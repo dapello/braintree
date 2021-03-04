@@ -123,7 +123,7 @@ class NeuralDataModule(LightningDataModule):
         transforms = self.val_transform()
         dataset = self._get_dataset('test', transforms)
         loader = self._get_DataLoader(
-            dataset,
+            Wrapper(dataset),
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
@@ -193,9 +193,9 @@ class KKTemporalDataConstructer(object):
         self.partition = Partition(*partition_scheme)
         self.regions = hparams.regions
         self.animals = self.expand(hparams.animals)
-        self.n_fit_images = int(1e10) if hparams.stimuli=='All' else hparams.stimuli
-        self.n_fit_neurons = int(1e10) if hparams.neurons=='All' else hparams.neurons
-        self.n_trials = int(1e10) if hparams.trials=='All' else hparams.trials
+        self.n_fit_images = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
+        self.n_fit_neurons = int(1e10) if hparams.neurons=='All' else int(hparams.neurons)
+        self.n_trials = int(1e10) if hparams.trials=='All' else int(hparams.trials)
         self.n_heldout_neurons=50 
         self.window = int(1e10) if hparams.window=='All' else hparams.window
         self.return_heldout=0

@@ -41,8 +41,10 @@ class Model_Lightning(LightningModule):
             # for load_from_checkpoint bug: which uses dict instead of namespace
             hparams = argparse.Namespace(**hparams)
             
+        
         self.hparams = hparams
         self.record_time = hparams.record_time
+        self.loss_weights = hparams.loss_weights
         
         self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.regions = self.hook_layers()
@@ -65,36 +67,33 @@ class Model_Lightning(LightningModule):
         }
 
         return layer_hooks
-    
+
     def training_step(self, batch, batch_idx):
         losses = []
-        if 'ImageNet' in batch.keys():
-            losses.append(
-                self.classification(batch['ImageNet'], 'train')
-            )
-
-        for region in self.hparams.regions:
-            if region in batch.keys():
+        for i, batch_ in enumerate(batch):
+            if batch_[0][0] == 'ImageNet':
                 losses.append(
-                    self.similarity(batch[region], region, 'train')
+                    self.loss_weights[i]*self.classification(batch_[1], 'train')
                 )
-        # is this really working?
-        return sum(losses)
 
+            elif batch_[0][0] == ['NeuralData']:
+                losses.append(
+                    self.loss_weights[i]*self.similarity(batch[1], 'IT', 'train')
+                )
+
+        return sum(losses)
+    
     def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
         losses = []
-        # tried to do this in the Wrapper but for some reason it didn't play well. must investigate.
-        batch = {batch_[0][0] : batch_[1] for batch_ in batch}
-        if 'ImageNet' in batch.keys():
-            losses.append(
-                self.classification(batch['ImageNet'], mode)
-            )
-
-        batch['IT'] = batch['NeuralData']
-        for region in self.hparams.regions:
-            if region in batch.keys():
+        for i, batch_ in enumerate(batch):
+            if batch_[0][0] == 'ImageNet':
                 losses.append(
-                    self.similarity(batch[region], region, mode)
+                    self.classification(batch['ImageNet'], mode)
+                )
+
+            elif batch_[0][0] == ['NeuralData']:
+                losses.append(
+                    self.similarity(batch[region], 'IT', mode)
                 )
 
         return sum(losses)
@@ -112,7 +111,7 @@ class Model_Lightning(LightningModule):
             f'{mode}_acc1' : acc1,
             f'{mode}_acc5' : acc5
         }
-        self.log_dict(log, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log_dict(log, on_step=False, on_epoch=True, prog_bar=False, logger=True)
 
         return loss
 
@@ -181,24 +180,63 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')
         parser.add_argument('--neural_loss', default='CKA', choices=cls.neural_losses.keys(), type=str)
+        parser.add_argument('--loss_weights', nargs="*", default=[1,1], type=float,
+                            help="how to weight losses; [1,1] => equal weighting of imagenet and neural loss")
         parser.add_argument('--image_size', default=224, type=int)
-        parser.add_argument('--epochs', default=100, type=int, metavar='N')
+        parser.add_argument('--epochs', default=25, type=int, metavar='N')
         parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 96, 
                             help='this is the total batch size of all GPUs on the current node when '
                                  'using Data Parallel or Distributed Data Parallel')
         parser.add_argument('--scheduler', type=str, default='ExponentialLR')
         parser.add_argument('--lr', '--learning-rate', metavar='LR', dest='lr', type=float, default = 0.1)
-        parser.add_argument('--step_size', default=10, type=int,
+        parser.add_argument('--step_size', default=50, type=int,
                             help='after how many epochs learning rate should be decreased 10x')
         parser.add_argument('--momentum', metavar='M', type=float, default=0.9)
-        parser.add_argument('--weight_decay', default=1e-4, type=float, help='weight decay')
-        # change to step LR
-        parser.add_argument('--wd', '--weight-decay', metavar='W', dest='weight_decay', type=float, default = 1e-4)  # set to 1e-2 for cifar10
+        parser.add_argument('--wd', '--weight-decay', metavar='W', dest='weight_decay', type=float, 
+                            default = 1e-4)  # set to 1e-2 for cifar10
         parser.add_argument('--optim', dest='optim', default='sgd') # := {'sgd'}
         parser.add_argument('--pretrained', dest='pretrained', action='store_true', default = True)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser
+
+class CheckpointEveryNSteps(pl.Callback):
+    """
+    Save a checkpoint every N steps, instead of Lightning's default that checkpoints
+    based on validation loss.
+
+    taken from https://github.com/PyTorchLightning/pytorch-lightning/issues/2534#issuecomment-674582085
+    """
+
+    def __init__(
+        self,
+        save_step_frequency,
+        prefix="N-Step-Checkpoint",
+        use_modelcheckpoint_filename=True,
+    ):
+        """
+        Args:
+            save_step_frequency: how often to save in steps
+            prefix: add a prefix to the name, only used if
+                use_modelcheckpoint_filename=False
+            use_modelcheckpoint_filename: just use the ModelCheckpoint callback's
+                default filename, don't use ours.
+        """
+        self.save_step_frequency = save_step_frequency
+        self.prefix = prefix
+        self.use_modelcheckpoint_filename = use_modelcheckpoint_filename
+
+    def on_batch_end(self, trainer: pl.Trainer, _):
+        """ Check if we should save a checkpoint after every train batch """
+        epoch = trainer.current_epoch
+        global_step = trainer.global_step
+        if global_step % self.save_step_frequency == 0:
+            if self.use_modelcheckpoint_filename:
+                filename = trainer.checkpoint_callback.filename
+            else:
+                filename = f"{self.prefix}_{epoch}_{global_step}.ckpt"
+            ckpt_path = os.path.join(trainer.checkpoint_callback.dirpath, filename)
+            trainer.save_checkpoint(ckpt_path)
 
 # extract intermediate representations
 class Hook():

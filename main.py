@@ -5,7 +5,7 @@ import torch as ch
 from pytorch_lightning import Trainer, seed_everything, Callback
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger 
-from model_lightning import Model_Lightning as MODEL
+from model_lightning import Model_Lightning as MODEL, CheckpointEveryNSteps
 from datamodules import DATAMODULES
 from datamodules.neural_datamodule import SOURCES
 
@@ -18,17 +18,21 @@ def main(hparams):
     else: 
         deterministic = False
         
-    dm = DATAMODULES[hparams.datamodule](hparams)
-    model = MODEL(hparams)
-
     logger = TensorBoardLogger(
         hparams.log_save_path, name=hparams.file_name, 
         version=hparams.v_num
     ) 
+    hparams.v_num = logger.version
+
+    dm = DATAMODULES[hparams.datamodule](hparams)
+    model = MODEL(hparams)
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
-    ckpt_callback = ModelCheckpoint(verbose=hparams.verbose)
+    ckpt_callback = ModelCheckpoint(
+        verbose=hparams.verbose,
+        save_top_k=-1
+    )
 
     trainer = Trainer(
         default_root_dir=hparams.log_save_path,
@@ -66,20 +70,19 @@ def get_args(*args):
 
     # data specific arguments. maybe move to DATAMODULES like MODELS?
     parent_parser.add_argument('-d', '--datamodule', dest='datamodule', default='ImageNetAndNeuralData', 
-        choices=DATAMODULES.keys(), help='which datamodule to use.')
+                               choices=DATAMODULES.keys(), help='which datamodule to use.')
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
-        choices=SOURCES.keys(), help='which source neural dataset to construct from')
-    #parent_parser.add_argument('--animals', dest='animals', action='append', default=[],
+                               choices=SOURCES.keys(), help='which source neural dataset to construct from')
     parent_parser.add_argument('--animals', dest='animals',  nargs='*', default=['All'],
-        help='which animals to load from the dataset. should be of form "nano.right"')
+                               help='which animals to load from the dataset. should be of form "nano.right"')
     parent_parser.add_argument('-n', '--neurons', dest='neurons', default='All',
-        help='how many neurons to fit to')
+                               help='how many of the train neurons to fit to')
     parent_parser.add_argument('-s', '--stimuli', dest='stimuli', default='All',
-        help='how many stimuli to fit to')
+                               help='how many of the train stimuli to fit to')
     parent_parser.add_argument('-t', '--trials', dest='trials', default='All',
-        help='how many trials of stimuli presentation to average over')
+                               help='how many trials of stimuli presentation to average over')
     parent_parser.add_argument('--window', default='7t17',
-        help='time window to average neural data over. 7t17 => 70ms through 170ms')
+                               help='time window to average neural data over. 7t17 => 70ms through 170ms')
 
     parser = MODEL.add_model_specific_args(parent_parser)
     args, unknown = parser.parse_known_args(*args) 
