@@ -107,7 +107,8 @@ class NeuralDataModule(LightningDataModule):
         dataset = self._get_dataset('train', transforms)
 
         loader = self._get_DataLoader(
-            Wrapper(dataset),
+            #Wrapper(dataset),
+            dataset,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
@@ -123,7 +124,8 @@ class NeuralDataModule(LightningDataModule):
         transforms = self.val_transform()
         dataset = self._get_dataset('test', transforms)
         loader = self._get_DataLoader(
-            Wrapper(dataset),
+            #Wrapper(dataset),
+            dataset,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,

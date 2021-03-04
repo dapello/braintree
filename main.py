@@ -24,8 +24,17 @@ def main(hparams):
     ) 
     hparams.v_num = logger.version
 
-    dm = DATAMODULES[hparams.datamodule](hparams)
-    model = MODEL(hparams)
+    if hparams.datamodule == 'ImageNetAndNeuralData':
+        dm = {
+            'ImageNet' : DATAMODULES['ImageNet'](hparams),
+            'NeuralData' : DATAMODULES['NeuralData'](hparams)
+        }
+    else:
+        dm = {
+            hparams.datamodule : DATAMODULES[hparams.datamodule](hparams)
+        }
+
+    model = MODEL(hparams, dm)
 
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
@@ -43,12 +52,13 @@ def main(hparams):
         num_nodes=hparams.num_nodes,
         logger=logger, callbacks=[lr_monitor],  #   PrintingCallback()],
         deterministic=deterministic,
+        multiple_trainloader_mode='min_size'
     ) 
     
     if hparams.evaluate:
-        trainer.test(model, test_dataloaders=dm.val_dataloader())
+        trainer.test(model, test_dataloaders=[dm[key].val_dataloader() for key in dm])
     else:
-        trainer.fit(model, dm)
+        trainer.fit(model)
 
 def get_args(*args):
     parent_parser = argparse.ArgumentParser(add_help=False)

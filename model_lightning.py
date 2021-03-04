@@ -34,7 +34,7 @@ class Model_Lightning(LightningModule):
         'logCKA' : LogCenteredKernelAlignment
     }
 
-    def __init__(self, hparams, *args, **kwargs): 
+    def __init__(self, hparams, dm, *args, **kwargs): 
         super().__init__()
         
         if isinstance(hparams, dict):  
@@ -42,6 +42,7 @@ class Model_Lightning(LightningModule):
             hparams = argparse.Namespace(**hparams)
             
         
+        self.dm = dm
         self.hparams = hparams
         self.record_time = hparams.record_time
         self.loss_weights = hparams.loss_weights
@@ -68,33 +69,51 @@ class Model_Lightning(LightningModule):
 
         return layer_hooks
 
+    def train_dataloader(self):
+        # pass loaders as a dict. This will create batches like this:
+        # {'a': batch from loader_a, 'b': batch from loader_b}
+        # loaders = {key : self.dm[key].train_dataloader() for key in self.dm}
+        loaders = [self.dm[key].train_dataloader() for key in self.dm]
+
+        return loaders
+
+    def val_dataloader(self):
+        # loaders = {key : self.dm[key].val_dataloader() for key in self.dm}
+        loaders = [self.dm[key].val_dataloader() for key in self.dm]
+
+        return loaders
+
     def training_step(self, batch, batch_idx):
         losses = []
-        for i, batch_ in enumerate(batch):
-            if batch_[0][0] == 'ImageNet':
+        for dataloader_idx, batch_ in enumerate(batch):
+            if dataloader_idx == 0:
                 losses.append(
-                    self.loss_weights[i]*self.classification(batch_[1], 'train')
+                    self.loss_weights[dataloader_idx]*self.classification(
+                        batch_, 'train'
+                    )
                 )
 
-            elif batch_[0][0] == ['NeuralData']:
+            elif dataloader_idx == 1:
                 losses.append(
-                    self.loss_weights[i]*self.similarity(batch[1], 'IT', 'train')
+                    self.loss_weights[dataloader_idx]*self.similarity(
+                        batch_, 'IT', 'train'
+                    )
                 )
 
         return sum(losses)
     
     def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
+        ## need a proper map here for the dataloader_idx
         losses = []
-        for i, batch_ in enumerate(batch):
-            if batch_[0][0] == 'ImageNet':
-                losses.append(
-                    self.classification(batch['ImageNet'], mode)
-                )
+        if dataloader_idx == 0:
+            losses.append(
+                self.classification(batch, mode)
+            )
 
-            elif batch_[0][0] == ['NeuralData']:
-                losses.append(
-                    self.similarity(batch[region], 'IT', mode)
-                )
+        if dataloader_idx == 1:
+            losses.append(
+                self.similarity(batch, 'IT', mode)
+            )
 
         return sum(losses)
 
@@ -187,7 +206,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 96, 
                             help='this is the total batch size of all GPUs on the current node when '
                                  'using Data Parallel or Distributed Data Parallel')
-        parser.add_argument('--scheduler', type=str, default='ExponentialLR')
+        parser.add_argument('--scheduler', type=str, default='StepLR')
         parser.add_argument('--lr', '--learning-rate', metavar='LR', dest='lr', type=float, default = 0.1)
         parser.add_argument('--step_size', default=50, type=int,
                             help='after how many epochs learning rate should be decreased 10x')
