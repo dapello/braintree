@@ -83,8 +83,10 @@ def get_args(*args):
                                choices=DATAMODULES.keys(), help='which datamodule to use.')
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
-    parent_parser.add_argument('--animals', dest='animals',  nargs='*', default=['All'],
-                               help='which animals to load from the dataset. should be of form "nano.right"')
+    parent_parser.add_argument('--fit_animals', dest='fit_animals',  nargs='*', default=['All'],
+                               help='which animals to fit from the dataset, should be of form "nano.right"')
+    parent_parser.add_argument('--test_animals', dest='test_animals',  nargs='*', default=['All'],
+                               help='which animals to test on from the dataset, of form "nano.right"')
     parent_parser.add_argument('-n', '--neurons', dest='neurons', default='All',
                                help='how many of the train neurons to fit to')
     parent_parser.add_argument('-s', '--stimuli', dest='stimuli', default='All',

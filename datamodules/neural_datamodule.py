@@ -13,59 +13,6 @@ from .imagenet_datamodule import ImagenetDataModule
 from .normalization import imagenet_normalization
 from .wrapper import Wrapper
 
-class ImageNetAndNeuralDataModule(LightningDataModule):
-    name = 'ImageNetAndNeuralData'
-    """
-    merges both ImageNet loader and the NeuralData loader below through
-    Wrapper. Wrapper returns batches inside a dictionary, with dataset name 
-    as the key.
-    """
-    def __init__(
-        self, 
-        hparams,
-        *args,
-        **kwargs
-    ):
-        super().__init__(*args, **kwargs)
-
-        self.hparams = hparams
-        self.num_workers = hparams.num_workers
-        self.batch_size = hparams.batch_size
-        self.ImageNet = ImagenetDataModule(hparams)
-        self.NeuralData = NeuralDataModule(hparams)
-
-    def train_dataloader(self):
-        dataset = Wrapper(
-            self.ImageNet._get_dataset('train', self.ImageNet.train_transform()),
-            self.NeuralData._get_dataset('train', self.NeuralData.train_transform())
-        )
-
-        loader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            pin_memory=True
-        )
-
-        return loader
-
-    def val_dataloader(self):
-        dataset = Wrapper(
-            self.ImageNet._get_dataset('val', self.ImageNet.val_transform()),
-            self.NeuralData._get_dataset('val', self.NeuralData.val_transform())
-        )
-
-        loader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            pin_memory=True
-        )
-
-        return loader
-        
 class NeuralDataModule(LightningDataModule):
     name = 'NeuralData'
     """
@@ -88,14 +35,6 @@ class NeuralDataModule(LightningDataModule):
         self.batch_size = hparams.batch_size
         self.constructor = SOURCES[hparams.neuraldataset](hparams)
 
-    def _get_dataset(self, type_, transforms):
-        # construct data here
-        X = self.constructor.get_stimuli()[type_]
-        Y = self.constructor.get_neural_responses()[type_]
-        dataset = CustomTensorDataset(X, Y, transforms)
-        dataset.name = self.name
-        return dataset
-
     def _get_DataLoader(self, *args, **kwargs):
         return DataLoader(*args, **kwargs)
     
@@ -103,11 +42,22 @@ class NeuralDataModule(LightningDataModule):
         """
         Uses the train split from provided neural data path 
         """
+        hparams = self.hparams
+
+        X = self.constructor.get_stimuli(mode='train')
+        Y = self.constructor.get_neural_responses(
+            animals=hparams.fit_animals, n_neurons=hparams.neurons,
+            n_trials=hparams.n_trials, heldout_neurons=0, mode='train', 
+            hparams=hparams
+        )
+
         transforms = self.train_transform() 
-        dataset = self._get_dataset('train', transforms)
+
+        # number of stimuli to fit to
+        n_stimuli = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
+        dataset = CustomTensorDataset(X[:n_stimuli], Y[:n_stimuli], transforms)
 
         loader = self._get_DataLoader(
-            #Wrapper(dataset),
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
@@ -117,14 +67,24 @@ class NeuralDataModule(LightningDataModule):
         )
         return loader
 
-    def val_dataloader(self):
+    def val_dataloader(self, heldout_neurons=0):
         """
         Uses the validation split of imagenet2012 for testing
         """
+        hparams = self.hparams
+
+        X = self.constructor.get_stimuli(mode='test')
+        Y = self.constructor.get_neural_responses(
+            animals=hparams.test_animals, n_neurons=hparams.neurons,
+            n_trials='All', heldout_neurons=heldout_neurons, mode='test',
+            hparams=hparams
+        )
+        
         transforms = self.val_transform()
-        dataset = self._get_dataset('test', transforms)
+
+        dataset = CustomTensorDataset(X, Y, transforms)
+        
         loader = self._get_DataLoader(
-            #Wrapper(dataset),
             dataset,
             batch_size=self.batch_size,
             shuffle=False,
@@ -192,41 +152,38 @@ class KKTemporalDataConstructer(object):
         super().__init__(*args, **kwargs)
         self.hparams = hparams
         self.data = h5.File('/om2/user/dapello/neural_data/kk_temporal_data.h5', 'r')
-        self.partition = Partition(*partition_scheme)
-        self.regions = hparams.regions
-        self.animals = self.expand(hparams.animals)
-        self.n_fit_images = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
-        self.n_fit_neurons = int(1e10) if hparams.neurons=='All' else int(hparams.neurons)
-        self.n_trials = int(1e10) if hparams.trials=='All' else int(hparams.trials)
+        self.partition = Partition(*partition_scheme, seed=hparams.seed)
         self.n_heldout_neurons=50 
-        self.window = int(1e10) if hparams.window=='All' else hparams.window
-        self.return_heldout=0
         self.verbose = hparams.verbose
 
-    def get_stimuli(self):
+    def get_stimuli(self, mode):
         # correct flipped axes
         X = self.data['images']['raw'][:].transpose(0,1,3,2)
         # partition the stimuli
-        X_Partitioned = self.partition(X)
-        X_Partitioned['train'] = X_Partitioned['train'][:self.n_fit_images]
+        X_Partitioned = self.partition(X)[mode]
         return X_Partitioned
 
-    def get_neural_responses(self):
+    def get_neural_responses(self, animals, n_neurons, n_trials, heldout_neurons, mode, hparams):
+        # transform "All" to all dataset's animals
+        animals = self.expand(animals)
+        n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)
+        n_trials = int(1e10) if n_trials=='All' else int(n_trials)
         X = np.concatenate([
-            self._get_neural_responses(
-                animal
-            )
-            for animal in self.animals
+            self._get_neural_responses(animal, n_trials, heldout_neurons, hparams)
+            for animal in animals
         ], axis=1)
+
+        # only return [:n_neurons] if it's not the heldout set of neurons
+        if heldout_neurons == 0:
+            # should be taking a random sample not just first n. can we reuse partition neurons?
+            X = X[:, :n_neurons]
 
         if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
         
-        X_Partitioned = self.partition(X)
-        X_Partitioned['train'] = X_Partitioned['train'][:self.n_fit_images]
-
+        X_Partitioned = self.partition(X)[mode]
         return X_Partitioned
 
-    def _get_neural_responses(self, animal):
+    def _get_neural_responses(self, animal, n_trials, heldout_neurons, hparams):
         animal, region = animal.split('.')
         X = self.data['neural'][animal][region]
 
@@ -236,7 +193,7 @@ class KKTemporalDataConstructer(object):
             )
 
         # get mean over time window
-        start, stop = [int(s) for s in self.window.split('t')]
+        start, stop = [int(s) for s in hparams.window.split('t')]
         X = np.nanmean(X[start:stop], axis=0)
 
         if self.verbose:
@@ -247,15 +204,15 @@ class KKTemporalDataConstructer(object):
         return_heldout==0 => fitting set,
         return_heldout==1 => heldout set
         """
-        X = self.partition_neurons(X, X.shape[1]-self.n_heldout_neurons)[self.return_heldout]
-        X = X[:, :self.n_fit_neurons, :]
+        X = self.partition_neurons(
+            X, X.shape[1]-self.n_heldout_neurons, seed=hparams.seed
+        )[heldout_neurons]
 
         if self.verbose:
             print(f'(stimuli, sites, trials) : {X.shape}')
 
         # take mean over trials
-        if self.n_trials!='All':
-            X = X[:,:,:self.n_trials]
+        X = X[:,:,:n_trials]
         X = np.nanmean(X, axis=2)
 
         if self.verbose:
@@ -271,8 +228,8 @@ class KKTemporalDataConstructer(object):
         return animals
 
     @staticmethod
-    def partition_neurons(X, ntrain):
-        np.random.seed(0)
+    def partition_neurons(X, ntrain, seed=0):
+        np.random.seed(seed)
         idx = np.random.choice(X.shape[1], X.shape[1], replace=False)
         return X[:,idx[:ntrain]], X[:,idx[ntrain:]]
 
@@ -292,10 +249,10 @@ class Partition(object):
         responses[idx]
     
     """
-    def __init__(self, ntotal, ntrain, ntest, nval, idx=None):
+    def __init__(self, ntotal, ntrain, ntest, nval, seed=0, idx=None):
         super(Partition, self).__init__()
         # always generate the same random partition, for now
-        np.random.seed(0)
+        np.random.seed(seed)
         self.ntotal = ntotal
         self.ntrain = ntrain
         self.ntest = ntest
