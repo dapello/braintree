@@ -50,6 +50,8 @@ class Model_Lightning(LightningModule):
         self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.regions = self.hook_layers()
         self.neural_loss = self.neural_losses[hparams.neural_loss]()
+        self.train_acc = pl.metrics.Accuracy()
+        self.valid_acc = pl.metrics.Accuracy()
 
         print('record_time = ', self.record_time)
         
@@ -105,6 +107,9 @@ class Model_Lightning(LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
         ## need a proper map here for the dataloader_idx
         losses = []
+        if dataloader_idx is None:
+            dataloader_idx = 0
+
         if dataloader_idx == 0:
             losses.append(
                 self.classification(batch, mode)
@@ -125,12 +130,20 @@ class Model_Lightning(LightningModule):
         Y_hat = self.model(X)
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
+
         log = {
             f'{mode}_loss' : loss,
             f'{mode}_acc1' : acc1,
             f'{mode}_acc5' : acc5
         }
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=False, logger=True)
+
+        #if mode == 'train':
+        #    self.train_acc(Y_hat, Y)
+        #    self.log('train_acc', self.train_acc, on_step=True, on_epoch=False)
+        #elif mode == 'val':
+        #    self.valid_acc(Y_hat, Y)
+        #    self.log('valid_acc', self.valid_acc, on_step=True, on_epoch=True)
 
         return loss
 
@@ -142,7 +155,7 @@ class Model_Lightning(LightningModule):
         log = {
             f'{mode}_{self.neural_loss.name}' : loss
         }
-        self.log_dict(log, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log_dict(log, on_step=False, on_epoch=True, prog_bar=False, logger=True)
 
         return loss
 

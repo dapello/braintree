@@ -47,7 +47,7 @@ class NeuralDataModule(LightningDataModule):
         X = self.constructor.get_stimuli(mode='train')
         Y = self.constructor.get_neural_responses(
             animals=hparams.fit_animals, n_neurons=hparams.neurons,
-            n_trials=hparams.n_trials, heldout_neurons=0, mode='train', 
+            n_trials=hparams.trials, heldout_neurons=0, mode='train', 
             hparams=hparams
         )
 
@@ -65,6 +65,8 @@ class NeuralDataModule(LightningDataModule):
             drop_last=True,
             pin_memory=True,
         )
+        if self.hparams.verbose:
+            print(f'neural train set shape: {X.shape}')
         return loader
 
     def val_dataloader(self, heldout_neurons=0):
@@ -92,6 +94,9 @@ class NeuralDataModule(LightningDataModule):
             drop_last=True,
             pin_memory=True
         )
+
+        if self.hparams.verbose:
+            print(f'neural validation set shape: {X.shape}')
         return loader
 
     def train_transform(self):
@@ -164,6 +169,13 @@ class KKTemporalDataConstructer(object):
         return X_Partitioned
 
     def get_neural_responses(self, animals, n_neurons, n_trials, heldout_neurons, mode, hparams):
+        if self.verbose:
+            print(
+                f'constructing {mode} data with\n' +
+                f'animals:{animals}\n' +
+                f'neurons:{n_neurons}\n' +
+                f'trials:{n_trials}\n'
+            )
         # transform "All" to all dataset's animals
         animals = self.expand(animals)
         n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)

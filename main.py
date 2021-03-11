@@ -24,15 +24,10 @@ def main(hparams):
     ) 
     hparams.v_num = logger.version
 
-    if hparams.datamodule == 'ImageNetAndNeuralData':
-        dm = {
-            'ImageNet' : DATAMODULES['ImageNet'](hparams),
-            'NeuralData' : DATAMODULES['NeuralData'](hparams)
-        }
-    else:
-        dm = {
-            hparams.datamodule : DATAMODULES[hparams.datamodule](hparams)
-        }
+    dm = { 
+        module_name : DATAMODULES[module_name](hparams)
+        for module_name in hparams.datamodule
+    }
 
     model = MODEL(hparams, dm)
 
@@ -47,12 +42,14 @@ def main(hparams):
         default_root_dir=hparams.log_save_path,
         gpus=hparams.gpus,   
         max_epochs=hparams.epochs,   
+        #num_sanity_val_steps=-1,
         checkpoint_callback=ckpt_callback,
         distributed_backend=hparams.distributed_backend, 
         num_nodes=hparams.num_nodes,
         logger=logger, callbacks=[lr_monitor],  #   PrintingCallback()],
         deterministic=deterministic,
-        multiple_trainloader_mode='min_size'
+        multiple_trainloader_mode='min_size',
+        #profiler="simple"
     ) 
     
     if hparams.evaluate:
@@ -64,7 +61,8 @@ def get_args(*args):
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('--seed', type=int, default=42,
                                 help='seed for initializing training. ')
-    parent_parser.add_argument('--save-path', metavar='DIR', type=str, default=default_save_path,  help='path to save output')
+    parent_parser.add_argument('--save-path', metavar='DIR', type=str, default=default_save_path, 
+                               help='path to save output')
     parent_parser.add_argument('--num_workers', type=int, default=16,
                                help='how many workers')
     parent_parser.add_argument('--num_nodes', type=int, default=1,
@@ -79,8 +77,9 @@ def get_args(*args):
                                help='evaluate model on validation set')
 
     # data specific arguments. maybe move to DATAMODULES like MODELS?
-    parent_parser.add_argument('-d', '--datamodule', dest='datamodule', default='ImageNetAndNeuralData', 
-                               choices=DATAMODULES.keys(), help='which datamodule to use.')
+    parent_parser.add_argument('-d', '--datamodule', dest='datamodule', nargs='+', 
+                               default=['ImageNet', 'NeuralData'], choices=DATAMODULES.keys(), 
+                               help='which datamodule to use.')
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
     parent_parser.add_argument('--fit_animals', dest='fit_animals',  nargs='*', default=['All'],
@@ -116,7 +115,7 @@ def get_filename(hparams):
     filename = f'model_{hparams.arch}'\
         + f'-loss_{hparams.neural_loss}'\
         + f'-ds_kktemporal'\
-        + f'-animals_{"+".join(hparams.animals)}'\
+        + f'-animals_{"+".join(hparams.fit_animals)}'\
         + f'-regions_{"+".join(hparams.regions)}'\
         + f'-trials_{hparams.trials}'\
         + f'-neurons_{hparams.neurons}'\
