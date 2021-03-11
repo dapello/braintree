@@ -5,7 +5,7 @@ import torch as ch
 from pytorch_lightning import Trainer, seed_everything, Callback
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger 
-from model_lightning import Model_Lightning as MODEL, CheckpointEveryNSteps
+from model_lightning import Model_Lightning as MODEL
 from datamodules import DATAMODULES
 from datamodules.neural_datamodule import SOURCES
 
@@ -61,7 +61,7 @@ def get_args(*args):
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument('--seed', type=int, default=42,
                                 help='seed for initializing training. ')
-    parent_parser.add_argument('--save-path', metavar='DIR', type=str, default=default_save_path, 
+    parent_parser.add_argument('--save_path', metavar='DIR', type=str, default=default_save_path, 
                                help='path to save output')
     parent_parser.add_argument('--num_workers', type=int, default=16,
                                help='how many workers')
@@ -115,7 +115,8 @@ def get_filename(hparams):
     filename = f'model_{hparams.arch}'\
         + f'-loss_{hparams.neural_loss}'\
         + f'-ds_kktemporal'\
-        + f'-animals_{"+".join(hparams.fit_animals)}'\
+        + f'-fanimals_{"+".join(hparams.fit_animals)}'\
+        + f'-tanimals_{"+".join(hparams.test_animals)}'\
         + f'-regions_{"+".join(hparams.regions)}'\
         + f'-trials_{hparams.trials}'\
         + f'-neurons_{hparams.neurons}'\
