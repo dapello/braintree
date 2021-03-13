@@ -44,10 +44,10 @@ class NeuralDataModule(LightningDataModule):
         """
         hparams = self.hparams
 
-        X = self.constructor.get_stimuli(mode='train')
+        X = self.constructor.get_stimuli(stimuli_partition='train')
         Y = self.constructor.get_neural_responses(
             animals=hparams.fit_animals, n_neurons=hparams.neurons,
-            n_trials=hparams.trials, heldout_neurons=0, mode='train', 
+            n_trials=hparams.trials, neuron_partition=0, stimuli_partition='train', 
             hparams=hparams
         )
 
@@ -69,16 +69,16 @@ class NeuralDataModule(LightningDataModule):
             print(f'neural train set shape: {X.shape}, {Y.shape}')
         return loader
 
-    def val_dataloader(self, heldout_neurons=0):
+    def val_dataloader(self, stimuli_partition='test', neuron_partition=0):
         """
         Uses the validation split of imagenet2012 for testing
         """
         hparams = self.hparams
 
-        X = self.constructor.get_stimuli(mode='test')
+        X = self.constructor.get_stimuli(stimuli_partition=stimuli_partition)
         Y = self.constructor.get_neural_responses(
             animals=hparams.test_animals, n_neurons=hparams.neurons,
-            n_trials='All', heldout_neurons=heldout_neurons, mode='test',
+            n_trials='All', neuron_partition=neuron_partition, stimuli_partition=stimuli_partition,
             hparams=hparams
         )
         
@@ -91,7 +91,7 @@ class NeuralDataModule(LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
-            drop_last=True,
+            drop_last=False,
             pin_memory=True
         )
 
@@ -162,17 +162,17 @@ class KKTemporalDataConstructer(object):
         self.n_heldout_neurons=50 
         self.verbose = hparams.verbose
 
-    def get_stimuli(self, mode):
+    def get_stimuli(self, stimuli_partition):
         # correct flipped axes
         X = self.data['images']['raw'][:].transpose(0,1,3,2)
         # partition the stimuli
-        X_Partitioned = self.partition(X)[mode]
+        X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
 
-    def get_neural_responses(self, animals, n_neurons, n_trials, heldout_neurons, mode, hparams):
+    def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):
         if self.verbose:
             print(
-                f'constructing {mode} data with\n' +
+                f'constructing {stimuli_partition} data with\n' +
                 f'animals:{animals}\n' +
                 f'neurons:{n_neurons}\n' +
                 f'trials:{n_trials}\n'
@@ -182,21 +182,21 @@ class KKTemporalDataConstructer(object):
         n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)
         n_trials = int(1e10) if n_trials=='All' else int(n_trials)
         X = np.concatenate([
-            self._get_neural_responses(animal, n_trials, heldout_neurons, hparams)
+            self._get_neural_responses(animal, n_trials, neuron_partition, hparams)
             for animal in animals
         ], axis=1)
 
         # only return [:n_neurons] if it's not the heldout set of neurons
-        if heldout_neurons == 0:
+        if neuron_partition == 0:
             # should be taking a random sample not just first n. can we reuse partition neurons?
             X = X[:, :n_neurons]
 
         if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
         
-        X_Partitioned = self.partition(X)[mode]
+        X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
 
-    def _get_neural_responses(self, animal, n_trials, heldout_neurons, hparams):
+    def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
         animal, region = animal.split('.')
         X = self.data['neural'][animal][region]
 
@@ -219,7 +219,7 @@ class KKTemporalDataConstructer(object):
         """
         X = self.partition_neurons(
             X, X.shape[1]-self.n_heldout_neurons, seed=hparams.seed
-        )[heldout_neurons]
+        )[neuron_partition]
 
         if self.verbose:
             print(f'(stimuli, sites, trials) : {X.shape}')
@@ -257,16 +257,16 @@ class ManyMonkeysDataConstructer(object):
         self.n_heldout_neurons=0
         self.verbose = hparams.verbose
 
-    def get_stimuli(self, mode):
+    def get_stimuli(self, stimuli_partition):
         X = self.data['stimuli'][:].transpose(0,3,1,2)
         # partition the stimuli
-        X_Partitioned = self.partition(X)[mode]
+        X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
 
-    def get_neural_responses(self, animals, n_neurons, n_trials, heldout_neurons, mode, hparams):
+    def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):
         if self.verbose:
             print(
-                f'constructing {mode} data with\n' +
+                f'constructing {stimuli_partition} data with\n' +
                 f'animals:{animals}\n' +
                 f'neurons:{n_neurons}\n' +
                 f'trials:{n_trials}\n'
@@ -276,21 +276,21 @@ class ManyMonkeysDataConstructer(object):
         n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)
         n_trials = int(1e10) if n_trials=='All' else int(n_trials)
         X = np.concatenate([
-            self._get_neural_responses(animal, n_trials, heldout_neurons, hparams)
+            self._get_neural_responses(animal, n_trials, neuron_partition, hparams)
             for animal in animals
         ], axis=1)
 
         # only return [:n_neurons] if it's not the heldout set of neurons
-        if heldout_neurons == 0:
+        if neuron_partition == 0:
             # should be taking a random sample not just first n. can we reuse partition neurons?
             X = X[:, :n_neurons]
 
         if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
         
-        X_Partitioned = self.partition(X)[mode]
+        X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
 
-    def _get_neural_responses(self, animal, n_trials, heldout_neurons, hparams):
+    def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
         animal, region = animal.split('.')
         X = self.data[animal][region]['rates']
 
@@ -307,7 +307,7 @@ class ManyMonkeysDataConstructer(object):
         if self.n_heldout_neurons != 0:
             X = self.partition_neurons(
                 X, X.shape[1]-self.n_heldout_neurons, seed=hparams.seed
-            )[heldout_neurons]
+            )[neuron_partition]
 
         if self.verbose:
             print(f'(stimuli, sites, trials) : {X.shape}')

@@ -3,7 +3,7 @@ from collections import OrderedDict
 import argparse
 
 import numpy as np
-import torch
+import torch as ch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -27,12 +27,15 @@ MODEL_NAMES = sorted(
 
 ###########
 
+
 class Model_Lightning(LightningModule):
     
     neural_losses = {
         'CKA' : CenteredKernelAlignment,
         'logCKA' : LogCenteredKernelAlignment
     }
+
+    BENCHMARKS=['fneurons.fstimuli', 'fneurons.ustimuli', 'uneurons.fstimuli', 'uneurons.ustimuli']
 
     def __init__(self, hparams, dm, *args, **kwargs): 
         super().__init__()
@@ -50,6 +53,7 @@ class Model_Lightning(LightningModule):
         self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.regions = self.hook_layers()
         self.neural_loss = self.neural_losses[hparams.neural_loss]()
+        self.benchmarks = self.load_benchmarks()
         self.train_acc = pl.metrics.Accuracy()
         self.valid_acc = pl.metrics.Accuracy()
 
@@ -81,7 +85,13 @@ class Model_Lightning(LightningModule):
 
     def val_dataloader(self):
         # loaders = {key : self.dm[key].val_dataloader() for key in self.dm}
-        loaders = [self.dm[key].val_dataloader() for key in self.dm]
+        # inspect hparams for validation settings;
+        # validation options: 
+        # [fitted neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=0) 
+        # [heldout neurons, fitted stimuli] # dm.val_loader(stimuli_partion='train', neuron_partition=1) 
+        # [heldout neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=1) 
+
+        loaders = [self.dm[key].val_dataloader() for key in self.dm if "ImageNet" in key]
 
         return loaders
 
@@ -122,6 +132,63 @@ class Model_Lightning(LightningModule):
 
         return sum(losses)
 
+    def validation_epoch_end(self, outputs):
+        # what if we do the real neural validation work here?
+        # validation options: 
+        # [fitted neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=0) 
+        # [heldout neurons, fitted stimuli] # dm.val_loader(stimuli_partion='train', neuron_partition=1) 
+        # [heldout neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=1) 
+        if 'NeuralData' in self.dm.keys():
+            for key in self.benchmarks:
+                X, Y = [], []
+                for X_, Y_ in self.benchmarks[key]:
+                    X.append(X_)
+                    Y.append(Y_)
+                X = ch.cat(X).cuda()
+                Y = ch.cat(Y).cuda()
+                similarity_loss = self.similarity((X,Y), 'IT', key)
+
+    def load_benchmarks(self):
+        benchmarks = {}
+        if 'NeuralData' in self.dm.keys():
+            if self.hparams.benchmarks[0] == 'All':
+                self.hparams.benchmarks = self.BENCHMARKS
+
+            if 'fneurons.fstimuli' in self.hparams.benchmarks:
+                if self.hparams.verbose:
+                    print('validating on fitted neurons and fitted stimuli')
+
+                benchmarks['fneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
+                    stimuli_partition='train', neuron_partition=0
+                )
+                
+            if 'fneurons.ustimuli' in self.hparams.benchmarks:
+                if self.hparams.verbose:
+                    print('validating on fitted neurons and unfitted stimuli')
+
+                benchmarks['fneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
+                    stimuli_partition='test', neuron_partition=0
+                )
+
+            if 'uneurons.fstimuli' in self.hparams.benchmarks:
+                if self.hparams.verbose:
+                    print('validating on unfitted neurons and fitted stimuli')
+                
+                benchmarks['uneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
+                    stimuli_partition='train', neuron_partition=1
+                )
+
+            if 'uneurons.ustimuli' in self.hparams.benchmarks:
+                if self.hparams.verbose:
+                    print('validating on unfitted neurons and unfitted stimuli')
+                
+                benchmarks['uneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
+                    stimuli_partition='test', neuron_partition=1
+                )
+
+        return benchmarks
+
+
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
 
@@ -153,7 +220,7 @@ class Model_Lightning(LightningModule):
         Y_hat = self.regions[region].output
         loss = self.neural_loss(Y, Y_hat)
         log = {
-            f'{mode}_{self.neural_loss.name}' : loss
+            f'{self.neural_loss.name}_{mode}' : loss
         }
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
@@ -182,7 +249,7 @@ class Model_Lightning(LightningModule):
     @staticmethod
     def __accuracy(output, target, topk=(1,)):
         """Computes the precision@k for the specified values of k"""
-        with torch.no_grad():
+        with ch.no_grad():
             _, pred = output.topk(max(topk), dim=1, largest=True, sorted=True)
             pred = pred.t()
             correct = pred.eq(target.view(1, -1).expand_as(pred))
@@ -216,7 +283,7 @@ class Model_Lightning(LightningModule):
                             help="how to weight losses; [1,1] => equal weighting of imagenet and neural loss")
         parser.add_argument('--image_size', default=224, type=int)
         parser.add_argument('--epochs', default=25, type=int, metavar='N')
-        parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 96, 
+        parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 128, 
                             help='this is the total batch size of all GPUs on the current node when '
                                  'using Data Parallel or Distributed Data Parallel')
         parser.add_argument('--scheduler', type=str, default='StepLR')

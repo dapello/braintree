@@ -9,7 +9,7 @@ from model_lightning import Model_Lightning as MODEL
 from datamodules import DATAMODULES
 from datamodules.neural_datamodule import SOURCES
 
-default_save_path = "./"
+default_save_path = "" 
 
 def main(hparams):
     if hparams.seed is not None:
@@ -82,6 +82,9 @@ def get_args(*args):
                                help='which datamodule to use.')
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
+    parent_parser.add_argument('--benchmarks', dest='benchmarks',  nargs='*', default=['fneurons.ustimuli'],
+                               choices=['All'] + MODEL.BENCHMARKS,
+                               help='which metrics to collect at the end of the epoch')
     parent_parser.add_argument('--fit_animals', dest='fit_animals',  nargs='*', default=['All'],
                                help='which animals to fit from the dataset, should be of form "nano.right"')
     parent_parser.add_argument('--test_animals', dest='test_animals',  nargs='*', default=['All'],
@@ -105,7 +108,7 @@ def get_args(*args):
 
 def add_path_names(hparams):
     hparams.file_name = get_filename(hparams)
-    hparams.log_save_path = os.path.join(hparams.save_path, 'logs')
+    hparams.log_save_path = os.path.join('./logs', hparams.save_path)
     hparams.statedict_path = os.path.join(
         hparams.save_path, 'trained_models', hparams.file_name + '.pt'
     )  
@@ -114,7 +117,7 @@ def add_path_names(hparams):
 def get_filename(hparams):
     filename = f'model_{hparams.arch}'\
         + f'-loss_{hparams.neural_loss}'\
-        + f'-ds_kktemporal'\
+        + f'-ds_{hparams.neuraldataset}'\
         + f'-fanimals_{"+".join(hparams.fit_animals)}'\
         + f'-tanimals_{"+".join(hparams.test_animals)}'\
         + f'-regions_{"+".join(hparams.regions)}'\
