@@ -9,7 +9,7 @@ from model_lightning import Model_Lightning as MODEL
 from datamodules import DATAMODULES
 from datamodules.neural_datamodule import SOURCES
 
-default_save_path = "" 
+default_save_path = "dev" 
 
 def main(hparams):
     if hparams.seed is not None:

@@ -149,18 +149,35 @@ class CustomTensorDataset(Dataset):
 
 
 ############ Neural Data construction tools ############
+class NeuralDataConstructor:
+    def __init__(self, hparams, partition_scheme, *args, **kwargs):
+        self.hparams = hparams
+        self.partition = Partition(*partition_scheme, seed=hparams.seed)
+        self.verbose = hparams.verbose
 
-## should abstract base class and then build on it for individual constructors
-class KKTemporalDataConstructer(object):
+    def get_stimuli(self, *args, **kwargs):
+        # overwrite method with dataset specific operations
+        raise NameError('Method not implemented')
+
+    def get_neural_responses(self, *args, **kwargs):
+        # overwrite method with dataset specific operations
+        raise NameError('Method not implemented')
+
+    @staticmethod
+    def partition_neurons(X, ntrain, seed=0):
+        np.random.seed(seed)
+        idx = np.random.choice(X.shape[1], X.shape[1], replace=False)
+        return X[:,idx[:ntrain]], X[:,idx[ntrain:]]
+
+class KKTemporalDataConstructer(NeuralDataConstructor):
+
+    data = h5.File('/om2/user/dapello/neural_data/kk_temporal_data.h5', 'r')
+
     def __init__(
         self, hparams, partition_scheme=(1100, 900, 100, 100), *args, **kwargs
     ):
-        super().__init__(*args, **kwargs)
-        self.hparams = hparams
-        self.data = h5.File('/om2/user/dapello/neural_data/kk_temporal_data.h5', 'r')
-        self.partition = Partition(*partition_scheme, seed=hparams.seed)
-        self.n_heldout_neurons=50 
-        self.verbose = hparams.verbose
+        super().__init__(hparams, partition_scheme, *args, **kwargs)
+        self.n_heldout_neurons = 50 
 
     def get_stimuli(self, stimuli_partition):
         # correct flipped axes
@@ -233,29 +250,22 @@ class KKTemporalDataConstructer(object):
 
         assert ~np.isnan(np.sum(X))
         return X
-    
+
     @staticmethod
     def expand(animals):
         if animals[0] == 'All':
             animals = ['nano.right', 'nano.left', 'magneto.right']
         return animals
+    
+class ManyMonkeysDataConstructer(NeuralDataConstructor):
 
-    @staticmethod
-    def partition_neurons(X, ntrain, seed=0):
-        np.random.seed(seed)
-        idx = np.random.choice(X.shape[1], X.shape[1], replace=False)
-        return X[:,idx[:ntrain]], X[:,idx[ntrain:]]
+    data = h5.File('/om2/user/dapello/neural_data/many_monkeys.h5', 'r')
 
-class ManyMonkeysDataConstructer(object):
     def __init__(
         self, hparams, partition_scheme=(640, 540, 100, 0), *args, **kwargs
     ):
-        super().__init__(*args, **kwargs)
-        self.hparams = hparams
-        self.data = h5.File('/om2/user/dapello/neural_data/many_monkeys.h5', 'r')
-        self.partition = Partition(*partition_scheme, seed=hparams.seed)
-        self.n_heldout_neurons=0
-        self.verbose = hparams.verbose
+        super().__init__(hparams, partition_scheme, *args, **kwargs)
+        self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
         X = self.data['stimuli'][:].transpose(0,3,1,2)*255
@@ -325,16 +335,103 @@ class ManyMonkeysDataConstructer(object):
     @staticmethod
     def expand(animals):
         if animals[0] == 'All':
-            animals = ['nano.right', 'nano.left', 'magneto.right']
+            animals = ['nano.right', 'nano.left', 'magneto.right', 'bento.right', 'bento.left']
         return animals
 
-    @staticmethod
-    def partition_neurons(X, ntrain, seed=0):
-        np.random.seed(seed)
-        idx = np.random.choice(X.shape[1], X.shape[1], replace=False)
-        return X[:,idx[:ntrain]], X[:,idx[ntrain:]]
+class MajajHongDataConstructer(NeuralDataConstructor):
 
-class Partition(object):
+    data = h5.File('/om2/user/dapello/neural_data/MajajHong2015.h5', 'r')
+
+    def __init__(
+        self, hparams, partition_scheme=(5760, 5184, 576, 0), *args, **kwargs
+    ):
+        super().__init__(hparams, partition_scheme, *args, **kwargs)
+        self.n_heldout_neurons = 0
+
+    def get_stimuli(self, stimuli_partition):
+        X = self.data['stimuli'][:]
+        # partition the stimuli
+        X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):
+        # note, trials and time window not currently function in this implementation
+        if self.hparams.window != '7t17':
+            raise NameError('7t17 is the only time window implemented on MajajHong2015')
+        if n_trials != 'All':
+            raise NameError('n_trials not implemented on MajajHong2015')
+        if self.verbose:
+            print(
+                f'constructing {stimuli_partition} data with\n' +
+                f'animals:{animals}\n' +
+                f'neurons:{n_neurons}\n' +
+                f'trials:{n_trials}\n'
+            )
+        # transform "All" to all dataset's animals
+        animals = self.expand(animals)
+        n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)
+        n_trials = int(1e10) if n_trials=='All' else int(n_trials)
+        X = np.concatenate([
+            self._get_neural_responses(animal, n_trials, neuron_partition, hparams)
+            for animal in animals
+        ], axis=1)
+
+        # only return [:n_neurons] if it's not the heldout set of neurons
+        if neuron_partition == 0:
+            # should be taking a random sample not just first n. can we reuse partition neurons?
+            X = X[:, :n_neurons]
+
+        if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
+        
+        X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
+        animal, region = animal.split('.')
+        X = self.data[animal][region]
+
+        if self.verbose:
+            print(
+                f'{animal} {region} shape:\n(time_bins, stimuli, sites) : {X.shape}'
+            )
+
+        # get mean of 70 through 170 time bins
+        X = np.nanmean(X[list(range(14,24,2))], axis=0)
+
+        if self.verbose:
+            print(
+                f'{animal} {region} shape:\n(stimuli, sites) : {X.shape}'
+            )
+        """
+        get subset of neurons to fit/test on. 
+        return_heldout==0 => fitting set,
+        return_heldout==1 => heldout set
+        """
+        if self.n_heldout_neurons != 0:
+            X = self.partition_neurons(
+                X, X.shape[1]-self.n_heldout_neurons, seed=hparams.seed
+            )[neuron_partition]
+
+        #if self.verbose:
+        #    print(f'(stimuli, sites, trials) : {X.shape}')
+
+        ## take mean over trials
+        #X = X[:,:,:n_trials]
+        #X = np.nanmean(X, axis=2)
+
+        if self.verbose:
+            print(f'(stimuli, sites) : {X.shape}')
+
+        assert ~np.isnan(np.sum(X))
+        return X
+    
+    @staticmethod
+    def expand(animals):
+        if animals[0] == 'All':
+            animals = ['chabo.left', 'tito.left']
+        return animals
+
+class Partition:
     """ 
     generate random indices dividing data into train, test, and val sets.
     saves the indices, so you can easily use the same partition scheme on 
@@ -351,7 +448,6 @@ class Partition(object):
     
     """
     def __init__(self, ntotal, ntrain, ntest, nval, seed=0, idx=None):
-        super(Partition, self).__init__()
         # always generate the same random partition, for now
         np.random.seed(seed)
         self.ntotal = ntotal
@@ -388,7 +484,8 @@ class Partition(object):
 
 SOURCES = {
     'kktemporal' : KKTemporalDataConstructer,
-    'manymonkeys' : ManyMonkeysDataConstructer
+    'manymonkeys' : ManyMonkeysDataConstructer,
+    'majajhong2015' : MajajHongDataConstructer
 }
 
 """
