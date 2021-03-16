@@ -44,12 +44,12 @@ class NeuralDataModule(LightningDataModule):
         """
         hparams = self.hparams
 
-        X = self.constructor.get_stimuli(stimuli_partition='train')
+        X = self.constructor.get_stimuli(stimuli_partition='train').astype('float32')
         Y = self.constructor.get_neural_responses(
             animals=hparams.fit_animals, n_neurons=hparams.neurons,
             n_trials=hparams.trials, neuron_partition=0, stimuli_partition='train', 
             hparams=hparams
-        )
+        ).astype('float32')
 
         transforms = self.train_transform() 
 
@@ -75,12 +75,12 @@ class NeuralDataModule(LightningDataModule):
         """
         hparams = self.hparams
 
-        X = self.constructor.get_stimuli(stimuli_partition=stimuli_partition)
+        X = self.constructor.get_stimuli(stimuli_partition=stimuli_partition).astype('float32')
         Y = self.constructor.get_neural_responses(
             animals=hparams.test_animals, n_neurons=hparams.neurons,
             n_trials='All', neuron_partition=neuron_partition, stimuli_partition=stimuli_partition,
             hparams=hparams
-        )
+        ).astype('float32')
         
         transforms = self.val_transform()
 
@@ -258,7 +258,7 @@ class ManyMonkeysDataConstructer(object):
         self.verbose = hparams.verbose
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'][:].transpose(0,3,1,2)
+        X = self.data['stimuli'][:].transpose(0,3,1,2)*255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned

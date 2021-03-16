@@ -49,7 +49,9 @@ def main(hparams):
         logger=logger, callbacks=[lr_monitor],  #   PrintingCallback()],
         deterministic=deterministic,
         multiple_trainloader_mode='min_size',
-        #profiler="simple"
+        profiler="simple",
+        log_gpu_memory=True,
+        precision=16
     ) 
     
     if hparams.evaluate:
@@ -83,7 +85,7 @@ def get_args(*args):
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
     parent_parser.add_argument('--benchmarks', dest='benchmarks',  nargs='*', default=['fneurons.ustimuli'],
-                               choices=['All'] + MODEL.BENCHMARKS,
+                               choices=['None', 'All'] + MODEL.BENCHMARKS,
                                help='which metrics to collect at the end of the epoch')
     parent_parser.add_argument('--fit_animals', dest='fit_animals',  nargs='*', default=['All'],
                                help='which animals to fit from the dataset, should be of form "nano.right"')

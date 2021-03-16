@@ -139,14 +139,19 @@ class Model_Lightning(LightningModule):
         # [heldout neurons, fitted stimuli] # dm.val_loader(stimuli_partion='train', neuron_partition=1) 
         # [heldout neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=1) 
         if 'NeuralData' in self.dm.keys():
-            for key in self.benchmarks:
-                X, Y = [], []
-                for X_, Y_ in self.benchmarks[key]:
-                    X.append(X_)
-                    Y.append(Y_)
-                X = ch.cat(X).cuda()
-                Y = ch.cat(Y).cuda()
-                similarity_loss = self.similarity((X,Y), 'IT', key)
+            with ch.no_grad():
+                self.model.eval()
+                for key in self.benchmarks:
+                    X, Y = [], []
+                    for X_, Y_ in self.benchmarks[key]:
+                        X.append(X_)
+                        Y.append(Y_)
+                    X = ch.cat(X).cuda()
+                    Y = ch.cat(Y).cuda()
+                    similarity_loss = self.similarity((X,Y), 'IT', key)
+
+                    del X, Y, similarity_loss
+                    ch.cuda.empty_cache()
 
     def load_benchmarks(self):
         benchmarks = {}
@@ -156,7 +161,7 @@ class Model_Lightning(LightningModule):
 
             if 'fneurons.fstimuli' in self.hparams.benchmarks:
                 if self.hparams.verbose:
-                    print('validating on fitted neurons and fitted stimuli')
+                    print('\nvalidating on fitted neurons and fitted stimuli')
 
                 benchmarks['fneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
                     stimuli_partition='train', neuron_partition=0
@@ -164,7 +169,7 @@ class Model_Lightning(LightningModule):
                 
             if 'fneurons.ustimuli' in self.hparams.benchmarks:
                 if self.hparams.verbose:
-                    print('validating on fitted neurons and unfitted stimuli')
+                    print('\nvalidating on fitted neurons and unfitted stimuli')
 
                 benchmarks['fneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
                     stimuli_partition='test', neuron_partition=0
@@ -172,7 +177,7 @@ class Model_Lightning(LightningModule):
 
             if 'uneurons.fstimuli' in self.hparams.benchmarks:
                 if self.hparams.verbose:
-                    print('validating on unfitted neurons and fitted stimuli')
+                    print('\nvalidating on unfitted neurons and fitted stimuli')
                 
                 benchmarks['uneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
                     stimuli_partition='train', neuron_partition=1
@@ -180,7 +185,7 @@ class Model_Lightning(LightningModule):
 
             if 'uneurons.ustimuli' in self.hparams.benchmarks:
                 if self.hparams.verbose:
-                    print('validating on unfitted neurons and unfitted stimuli')
+                    print('\nvalidating on unfitted neurons and unfitted stimuli')
                 
                 benchmarks['uneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
                     stimuli_partition='test', neuron_partition=1
@@ -223,6 +228,11 @@ class Model_Lightning(LightningModule):
             f'{self.neural_loss.name}_{mode}' : loss
         }
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+        t = ch.cuda.get_device_properties(0).total_memory
+        r = ch.cuda.memory_reserved(0) 
+        a = ch.cuda.memory_allocated(0)
+        f = r-a  # free inside reserved
+        print(f'>>>sim: total {t}, reserved {r}, allocated {a}, free {f}')
 
         return loss
 
