@@ -6,8 +6,10 @@ from pytorch_lightning import Trainer, seed_everything, Callback
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger 
 from model_lightning import Model_Lightning as MODEL
+
 from datamodules import DATAMODULES
 from datamodules.neural_datamodule import SOURCES
+from braintree.benchmarks import list_brainscore_benchmarks
 
 default_save_path = "dev" 
 
@@ -86,6 +88,9 @@ def get_args(*args):
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
     parent_parser.add_argument('--benchmarks', dest='benchmarks',  nargs='*', default=['fneurons.ustimuli'],
                                choices=['None', 'All'] + MODEL.BENCHMARKS,
+                               help='which metrics to collect at the end of the epoch')
+    parent_parser.add_argument('-BS', '--BS_benchmarks', dest='BS_benchmarks',  nargs='*', default=['None'],
+                               choices=['None'] + list_brainscore_benchmarks(),
                                help='which metrics to collect at the end of the epoch')
     parent_parser.add_argument('--fit_animals', dest='fit_animals',  nargs='*', default=['All'],
                                help='which animals to fit from the dataset, should be of form "nano.right"')

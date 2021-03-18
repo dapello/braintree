@@ -11,7 +11,9 @@ import torch.optim.lr_scheduler as lr_scheduler
 
 import pytorch_lightning as pl
 from pytorch_lightning.core import LightningModule
+
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
+from braintree.benchmarks import score_model
 
 ########### Network Models ##############
 
@@ -54,8 +56,8 @@ class Model_Lightning(LightningModule):
         self.regions = self.hook_layers()
         self.neural_loss = self.neural_losses[hparams.neural_loss]()
         self.benchmarks = self.load_benchmarks()
-        self.train_acc = pl.metrics.Accuracy()
-        self.valid_acc = pl.metrics.Accuracy()
+        #self.train_acc = pl.metrics.Accuracy()
+        #self.valid_acc = pl.metrics.Accuracy()
 
         print('record_time = ', self.record_time)
         
@@ -153,6 +155,23 @@ class Model_Lightning(LightningModule):
                     del X, Y, similarity_loss
                     ch.cuda.empty_cache()
 
+        if self.hparams.BS_benchmarks[0] != 'None':
+            self.model.eval()
+            benchmark_log = {}
+            for benchmark_identifier in self.hparams.BS_benchmarks:
+                model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-gs_{self.global_step}'
+                layers = ['module.' + region for region in ['IT']]
+                score = score_model(
+                    model_identifier=model_id,
+                    model=self.model,
+                    layers=layers,
+                    benchmark_identifier=benchmark_identifier,
+                )
+
+                benchmark_log[benchmark_identifier] = score.values[0]
+
+            self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=False, logger=True)
+
     def load_benchmarks(self):
         benchmarks = {}
         if 'NeuralData' in self.dm.keys():
@@ -192,7 +211,6 @@ class Model_Lightning(LightningModule):
                 )
 
         return benchmarks
-
 
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
