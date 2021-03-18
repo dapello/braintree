@@ -315,8 +315,8 @@ class Model_Lightning(LightningModule):
                             help='this is the total batch size of all GPUs on the current node when '
                                  'using Data Parallel or Distributed Data Parallel')
         parser.add_argument('--scheduler', type=str, default='StepLR')
-        parser.add_argument('--lr', '--learning-rate', metavar='LR', dest='lr', type=float, default = 0.1)
-        parser.add_argument('--step_size', default=50, type=int,
+        parser.add_argument('--lr', '--learning-rate', metavar='LR', dest='lr', type=float, default = 0.001)
+        parser.add_argument('--step_size', default=10000, type=int,
                             help='after how many epochs learning rate should be decreased 10x')
         parser.add_argument('--momentum', metavar='M', type=float, default=0.9)
         parser.add_argument('--wd', '--weight-decay', metavar='W', dest='weight_decay', type=float, 

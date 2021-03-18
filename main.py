@@ -36,8 +36,9 @@ def main(hparams):
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
     ckpt_callback = ModelCheckpoint(
-        verbose=hparams.verbose,
-        save_top_k=-1
+        verbose = hparams.verbose,
+        monitor='val_loss',
+        save_top_k = hparams.save_top_k
     )
 
     trainer = Trainer(
@@ -75,6 +76,8 @@ def get_args(*args):
                                help='how many gpus')
     parent_parser.add_argument('--distributed-backend', type=str, default='dp', choices=('dp', 'ddp', 'ddp2'),
                                help='supports three options dp, ddp, ddp2')
+    parent_parser.add_argument('--save_top_k', dest='save_top_k', type=int, default=-1,
+                               help='how many model checkpoints to save. -1 for all')
     parent_parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
                                help='evaluate model on validation set')
     parent_parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
