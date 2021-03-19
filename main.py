@@ -46,6 +46,7 @@ def main(hparams):
         gpus=hparams.gpus,   
         max_epochs=hparams.epochs,   
         #num_sanity_val_steps=-1,
+        limit_val_batches=hparams.val_batches,
         checkpoint_callback=ckpt_callback,
         distributed_backend=hparams.distributed_backend, 
         num_nodes=hparams.num_nodes,
@@ -76,10 +77,12 @@ def get_args(*args):
                                help='how many gpus')
     parent_parser.add_argument('--distributed-backend', type=str, default='dp', choices=('dp', 'ddp', 'ddp2'),
                                help='supports three options dp, ddp, ddp2')
-    parent_parser.add_argument('--save_top_k', dest='save_top_k', type=int, default=-1,
+    parent_parser.add_argument('--save_top_k', dest='save_top_k', type=int, default=1,
                                help='how many model checkpoints to save. -1 for all')
+    parent_parser.add_argument('--val_batches', dest='val_batches', type=int, default=0.25,
+                               help='how many batches (10) / what percent (0.25) of the validation set to run.')
     parent_parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
-                               help='evaluate model on validation set')
+                               help='prints more details of dataloading / etc')
     parent_parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                                help='evaluate model on validation set')
 

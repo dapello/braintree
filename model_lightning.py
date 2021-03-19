@@ -87,11 +87,6 @@ class Model_Lightning(LightningModule):
 
     def val_dataloader(self):
         # loaders = {key : self.dm[key].val_dataloader() for key in self.dm}
-        # inspect hparams for validation settings;
-        # validation options: 
-        # [fitted neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=0) 
-        # [heldout neurons, fitted stimuli] # dm.val_loader(stimuli_partion='train', neuron_partition=1) 
-        # [heldout neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=1) 
 
         loaders = [self.dm[key].val_dataloader() for key in self.dm if "ImageNet" in key]
 
@@ -170,7 +165,7 @@ class Model_Lightning(LightningModule):
 
                 benchmark_log[benchmark_identifier] = score.values[0]
 
-            self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=False, logger=True)
+            self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def load_benchmarks(self):
         benchmarks = {}
