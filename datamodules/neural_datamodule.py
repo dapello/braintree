@@ -35,6 +35,18 @@ class NeuralDataModule(LightningDataModule):
         self.batch_size = hparams.batch_size
         self.constructor = SOURCES[hparams.neuraldataset](hparams)
 
+        # data augmentation parameters
+        self.gn_std = hparams.gaussian_noise
+        self.gb_kernel_size, self.gb_min_max_std = eval(hparams.gaussian_blur)
+        self.translate = eval(hparams.translate)
+        self.rotate = eval(hparams.rotate)
+        self.scale = eval(hparams.scale)
+        self.shear = eval(hparams.shear)
+        self.brightness = eval(hparams.brightness)
+        self.contrast = eval(hparams.contrast)
+        self.saturation = eval(hparams.saturation)
+        self.hue = eval(hparams.hue)
+
     def _get_DataLoader(self, *args, **kwargs):
         return DataLoader(*args, **kwargs)
     
@@ -100,12 +112,29 @@ class NeuralDataModule(LightningDataModule):
         return loader
 
     def train_transform(self):
-        preprocessing = transform_lib.Compose([
+        transforms = [
             transform_lib.ToPILImage(),
             transform_lib.Resize(self.image_size),
             transform_lib.ToTensor(),
+            transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
+            transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
+            transform_lib.RandomAffine(
+                degrees=self.rotate,
+                translate=self.translate, 
+                scale=self.scale,
+                shear=self.shear,
+                fill=0.5
+            ),
+            transform_lib.ColorJitter(
+                brightness=self.brightness,
+                contrast=self.contrast,
+                saturation=self.saturation,
+                hue=self.hue
+            ),
             imagenet_normalization(),
-        ])
+        ]
+
+        preprocessing = transform_lib.Compose(transforms)
 
         return preprocessing
 
