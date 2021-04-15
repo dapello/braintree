@@ -7,7 +7,7 @@ with open('README.md') as readme_file:
     readme = readme_file.read()
 
 requirements = [
-    "pytorch-lightning==1.2.1",
+    "pytorch-lightning==1.2.6",
     "torch==1.7.1",
     "torchvision",
     "numpy",

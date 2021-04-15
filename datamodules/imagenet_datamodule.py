@@ -8,9 +8,9 @@ from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 
 from torchvision import transforms as transform_lib
-from .normalization import imagenet_normalization
+from normalization import imagenet_normalization
 from torch.utils.data.distributed import DistributedSampler
-from .wrapper import Wrapper
+from wrapper import Wrapper
 
 #default_Imagenet_dir = '/data/ImageNet/ILSVRC2012'
 default_Imagenet_dir = '/om/data/public/imagenet/images_complete/ilsvrc/'

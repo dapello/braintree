@@ -108,9 +108,9 @@ def get_args(*args):
                                help='how many of the train stimuli to fit to')
     parent_parser.add_argument('-t', '--trials', dest='trials', default='All',
                                help='how many trials of stimuli presentation to average over')
-    parent_parser.add_argument('-gn', '--gaussian-noise', dest='gaussian_noise', type=float, default=0,
+    parent_parser.add_argument('-gn', '--gaussian-noise', dest='gaussian_noise', type=float, default=0.01,
                                help='data augmentation with Gaussian noise')
-    parent_parser.add_argument('-gb', '--gaussian-blur', dest='gaussian_blur', type=str, default='1, (0.1,2.0)',
+    parent_parser.add_argument('-gb', '--gaussian-blur', dest='gaussian_blur', type=str, default='3,(0.1,3.0)',
                                help='data augmentation with Gaussian blur')
     parent_parser.add_argument('--translate', dest='translate', type=str, default='(0.0625, 0.0625)',
                                help='data augmentation vertical or horizontal translation by up to .5 degrees')
@@ -122,9 +122,9 @@ def get_args(*args):
                                help='data augmentation shear jitter by up to .5 degrees')
     parent_parser.add_argument('--brightness', dest='brightness', type=str, default='0.1',
                                help='data augmentation brightness jitter')
-    parent_parser.add_argument('--contrast', dest='contrast', type=str, default='0.1',
+    parent_parser.add_argument('--contrast', dest='contrast', type=str, default='(0.75,1.25)',
                                help='data augmentation contrast jitter')
-    parent_parser.add_argument('--saturation', dest='saturation', type=str, default='0.1',
+    parent_parser.add_argument('--saturation', dest='saturation', type=str, default='(0.75,1.25)',
                                help='data augmentation saturation jitter')
     parent_parser.add_argument('--hue', dest='hue', type=str, default='0.1',
                                help='data augmentation hue jitter')

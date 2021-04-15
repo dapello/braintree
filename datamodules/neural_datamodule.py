@@ -9,9 +9,12 @@ from torchvision import transforms as transform_lib
 from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning import LightningDataModule
 
-from .imagenet_datamodule import ImagenetDataModule
-from .normalization import imagenet_normalization
-from .wrapper import Wrapper
+from imagenet_datamodule import ImagenetDataModule
+from normalization import imagenet_normalization
+from wrapper import Wrapper
+
+#NEURAL_DATA_PATH = '/home/joeldapello/Code/proj_braintree/braintree-0.2/braintree'
+NEURAL_DATA_PATH = '/om2/user/dapello'
 
 class NeuralDataModule(LightningDataModule):
     name = 'NeuralData'
@@ -115,15 +118,12 @@ class NeuralDataModule(LightningDataModule):
         transforms = [
             transform_lib.ToPILImage(),
             transform_lib.Resize(self.image_size),
-            transform_lib.ToTensor(),
-            transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
-            transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
             transform_lib.RandomAffine(
                 degrees=self.rotate,
                 translate=self.translate, 
                 scale=self.scale,
                 shear=self.shear,
-                fill=0.5
+                fillcolor=127
             ),
             transform_lib.ColorJitter(
                 brightness=self.brightness,
@@ -131,6 +131,9 @@ class NeuralDataModule(LightningDataModule):
                 saturation=self.saturation,
                 hue=self.hue
             ),
+            transform_lib.ToTensor(),
+            transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
+            transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
             imagenet_normalization(),
         ]
 
@@ -200,7 +203,7 @@ class NeuralDataConstructor:
 
 class KKTemporalDataConstructer(NeuralDataConstructor):
 
-    data = h5.File('/om2/user/dapello/neural_data/kk_temporal_data.h5', 'r')
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/kk_temporal_data.h5', 'r')
 
     def __init__(
         self, hparams, partition_scheme=(1100, 900, 100, 100), *args, **kwargs
@@ -288,7 +291,7 @@ class KKTemporalDataConstructer(NeuralDataConstructor):
     
 class ManyMonkeysDataConstructer(NeuralDataConstructor):
 
-    data = h5.File('/om2/user/dapello/neural_data/many_monkeys.h5', 'r')
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/many_monkeys.h5', 'r')
 
     def __init__(
         self, hparams, partition_scheme=(640, 540, 100, 0), *args, **kwargs
@@ -369,7 +372,7 @@ class ManyMonkeysDataConstructer(NeuralDataConstructor):
 
 class MajajHongDataConstructer(NeuralDataConstructor):
 
-    data = h5.File('/om2/user/dapello/neural_data/MajajHong2015.h5', 'r')
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/MajajHong2015.h5', 'r')
 
     def __init__(
         self, hparams, partition_scheme=(5760, 5184, 576, 0), *args, **kwargs
