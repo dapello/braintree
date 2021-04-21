@@ -9,9 +9,9 @@ from torchvision import transforms as transform_lib
 from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning import LightningDataModule
 
-from imagenet_datamodule import ImagenetDataModule
-from normalization import imagenet_normalization
-from wrapper import Wrapper
+from .imagenet_datamodule import ImagenetDataModule
+from .normalization import imagenet_normalization
+from .wrapper import Wrapper
 
 #NEURAL_DATA_PATH = '/home/joeldapello/Code/proj_braintree/braintree-0.2/braintree'
 NEURAL_DATA_PATH = '/om2/user/dapello'
