@@ -13,7 +13,7 @@ from imagenet_datamodule import ImagenetDataModule
 from normalization import imagenet_normalization
 from wrapper import Wrapper
 
-#NEURAL_DATA_PATH = '/home/joeldapello/Code/proj_braintree/braintree-0.2/braintree'
+NEURAL_DATA_PATH = '/home/joeldapello/Code/proj_braintree/braintree-0.2/braintree'
 NEURAL_DATA_PATH = '/om2/user/dapello'
 
 class NeuralDataModule(LightningDataModule):
@@ -213,7 +213,7 @@ class KKTemporalDataConstructer(NeuralDataConstructor):
 
     def get_stimuli(self, stimuli_partition):
         # correct flipped axes
-        X = self.data['images']['raw'][:].transpose(0,1,3,2)
+        X = self.data['images']['raw'][:].transpose(0,1,3,2)/255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
@@ -291,7 +291,7 @@ class KKTemporalDataConstructer(NeuralDataConstructor):
     
 class ManyMonkeysDataConstructer(NeuralDataConstructor):
 
-    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/many_monkeys.h5', 'r')
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/many_monkeys2.h5', 'r')
 
     def __init__(
         self, hparams, partition_scheme=(640, 540, 100, 0), *args, **kwargs
@@ -300,7 +300,7 @@ class ManyMonkeysDataConstructer(NeuralDataConstructor):
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'][:].transpose(0,3,1,2)*255
+        X = self.data['stimuli'][:].transpose(0,3,1,2)
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
@@ -367,7 +367,14 @@ class ManyMonkeysDataConstructer(NeuralDataConstructor):
     @staticmethod
     def expand(animals):
         if animals[0] == 'All':
-            animals = ['nano.right', 'nano.left', 'magneto.right', 'bento.right', 'bento.left']
+            animals = [
+                'nano.right', 'nano.left', 
+                'magneto.right', 'magneto.left', 
+                'bento.right', 'bento.left', 
+                'solo.left', 
+                'tito.right', 'tito.left', 
+                'chabo.left'
+            ]
         return animals
 
 class MajajHongDataConstructer(NeuralDataConstructor):
@@ -381,7 +388,7 @@ class MajajHongDataConstructer(NeuralDataConstructor):
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'][:]
+        X = self.data['stimuli'][:]/255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
