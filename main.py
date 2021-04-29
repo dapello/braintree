@@ -116,17 +116,17 @@ def get_args(*args):
                                help='data augmentation vertical or horizontal translation by up to .5 degrees')
     parent_parser.add_argument('--rotate', dest='rotate', type=str, default='(-0.5, 0.5)',
                                help='data augmentation rotation by up to .5 degrees')
-    parent_parser.add_argument('--scale', dest='scale', type=str, default='(0.9375, 1.0625)',
-                               help='data augmentation size jitter by up to .5 degrees')
+    parent_parser.add_argument('--scale', dest='scale', type=str, default='(0.9, 1.1)',
+                               help='data augmentation size jitter by up to a little more than .5 degrees')
     parent_parser.add_argument('--shear', dest='shear', type=str, default='(0.9375, 1.0625, 0.9375, 1.0625)',
                                help='data augmentation shear jitter by up to .5 degrees')
-    parent_parser.add_argument('--brightness', dest='brightness', type=str, default='0.1',
+    parent_parser.add_argument('--brightness', dest='brightness', type=str, default='0.2',
                                help='data augmentation brightness jitter')
-    parent_parser.add_argument('--contrast', dest='contrast', type=str, default='(0.75,1.25)',
+    parent_parser.add_argument('--contrast', dest='contrast', type=str, default='(0.5,1.5)',
                                help='data augmentation contrast jitter')
-    parent_parser.add_argument('--saturation', dest='saturation', type=str, default='(0.75,1.25)',
+    parent_parser.add_argument('--saturation', dest='saturation', type=str, default='0.',
                                help='data augmentation saturation jitter')
-    parent_parser.add_argument('--hue', dest='hue', type=str, default='0.1',
+    parent_parser.add_argument('--hue', dest='hue', type=str, default='0.',
                                help='data augmentation hue jitter')
     parent_parser.add_argument('--window', default='7t17',
                                help='time window to average neural data over. 7t17 => 70ms through 170ms')
