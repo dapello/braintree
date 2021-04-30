@@ -156,7 +156,14 @@ class Model_Lightning(LightningModule):
             benchmark_log = {}
             for benchmark_identifier in self.hparams.BS_benchmarks:
                 model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-gs_{self.global_step}'
-                layers = ['module.' + region for region in ['IT']]
+                if 'V1' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['V1']]
+                if 'V2' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['V2']]
+                if 'V4' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['V4']]
+                if 'IT' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['IT']]
                 score = score_model(
                     model_identifier=model_id,
                     model=self.model,
