@@ -37,6 +37,7 @@ class Model_Lightning(LightningModule):
         'logCKA' : LogCenteredKernelAlignment
     }
 
+    # f = fitted, u = unfitted. ie fnuerons.ustimuli => collect on fitted neurons and unfitted stimuli
     BENCHMARKS=['fneurons.fstimuli', 'fneurons.ustimuli', 'uneurons.fstimuli', 'uneurons.ustimuli']
 
     def __init__(self, hparams, dm, *args, **kwargs): 
@@ -305,7 +306,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--loss_weights', nargs="*", default=[1,1], type=float,
                             help="how to weight losses; [1,1] => equal weighting of imagenet and neural loss")
         parser.add_argument('--image_size', default=224, type=int)
-        parser.add_argument('--epochs', default=25, type=int, metavar='N')
+        parser.add_argument('--epochs', default=150, type=int, metavar='N')
         parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 128, 
                             help='this is the total batch size of all GPUs on the current node when '
                                  'using Data Parallel or Distributed Data Parallel')

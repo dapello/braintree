@@ -90,7 +90,7 @@ def get_args(*args):
     parent_parser.add_argument('-d', '--datamodule', dest='datamodule', nargs='+', 
                                default=['ImageNet', 'NeuralData'], choices=DATAMODULES.keys(), 
                                help='which datamodule to use.')
-    parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
+    parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='manymonkeys',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
     parent_parser.add_argument('--benchmarks', dest='benchmarks',  nargs='*', default=['fneurons.ustimuli'],
                                choices=['None', 'All'] + MODEL.BENCHMARKS,
