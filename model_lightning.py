@@ -56,6 +56,7 @@ class Model_Lightning(LightningModule):
         self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.regions = self.hook_layers()
         self.neural_loss = self.neural_losses[hparams.neural_loss]()
+        self.neural_val_loss = self.neural_losses[hparams.neural_val_loss]()
         self.benchmarks = self.load_benchmarks()
         #self.train_acc = pl.metrics.Accuracy()
         #self.valid_acc = pl.metrics.Accuracy()
@@ -156,7 +157,14 @@ class Model_Lightning(LightningModule):
             benchmark_log = {}
             for benchmark_identifier in self.hparams.BS_benchmarks:
                 model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-gs_{self.global_step}'
-                layers = ['module.' + region for region in ['IT']]
+                if 'V1' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['V1']]
+                if 'V2' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['V2']]
+                if 'V4' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['V4']]
+                if 'IT' in benchmark_identifier:
+                    layers = ['module.' + region for region in ['IT']]
                 score = score_model(
                     model_identifier=model_id,
                     model=self.model,
@@ -237,10 +245,19 @@ class Model_Lightning(LightningModule):
         X, Y = batch
         _ = self.model(X)
         Y_hat = self.regions[region].output
-        loss = self.neural_loss(Y, Y_hat)
-        log = {
-            f'{self.neural_loss.name}_{mode}' : loss
-        }
+
+        # this allows to test with a different loss than the train loss.
+        if mode == 'train':
+            loss = self.neural_loss(Y, Y_hat)
+            log = {
+                f'{self.neural_loss.name}_{mode}' : loss
+            }
+        else:
+            loss = self.neural_val_loss(Y, Y_hat)
+            log = {
+                f'{self.neural_val_loss.name}_{mode}' : loss
+            }
+
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
         t = ch.cuda.get_device_properties(0).total_memory
         r = ch.cuda.memory_reserved(0) 
@@ -303,6 +320,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')
         parser.add_argument('--neural_loss', default='CKA', choices=cls.neural_losses.keys(), type=str)
+        parser.add_argument('--neural_val_loss', default='CKA', choices=cls.neural_losses.keys(), type=str)
         parser.add_argument('--loss_weights', nargs="*", default=[1,1], type=float,
                             help="how to weight losses; [1,1] => equal weighting of imagenet and neural loss")
         parser.add_argument('--image_size', default=224, type=int)
