@@ -1,4 +1,4 @@
-import os, glob
+import os, glob, time
 from collections import OrderedDict
 import argparse
 
@@ -154,7 +154,7 @@ class Model_Lightning(LightningModule):
             self.model.eval()
             benchmark_log = {}
             for benchmark_identifier in self.hparams.BS_benchmarks:
-                model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-gs_{self.global_step}'
+                model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-gs_{self.global_step}-{time.time()}'
                 layers = ['module.' + region for region in ['IT']]
                 score = score_model(
                     model_identifier=model_id,
