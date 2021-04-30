@@ -90,7 +90,7 @@ def get_args(*args):
     parent_parser.add_argument('-d', '--datamodule', dest='datamodule', nargs='+', 
                                default=['ImageNet', 'NeuralData'], choices=DATAMODULES.keys(), 
                                help='which datamodule to use.')
-    parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='kktemporal',
+    parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='manymonkeys',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
     parent_parser.add_argument('--benchmarks', dest='benchmarks',  nargs='*', default=['fneurons.ustimuli'],
                                choices=['None', 'All'] + MODEL.BENCHMARKS,
@@ -108,6 +108,26 @@ def get_args(*args):
                                help='how many of the train stimuli to fit to')
     parent_parser.add_argument('-t', '--trials', dest='trials', default='All',
                                help='how many trials of stimuli presentation to average over')
+    parent_parser.add_argument('-gn', '--gaussian-noise', dest='gaussian_noise', type=float, default=0.01,
+                               help='data augmentation with Gaussian noise')
+    parent_parser.add_argument('-gb', '--gaussian-blur', dest='gaussian_blur', type=str, default='3,(0.1,3.0)',
+                               help='data augmentation with Gaussian blur')
+    parent_parser.add_argument('--translate', dest='translate', type=str, default='(0.0625, 0.0625)',
+                               help='data augmentation vertical or horizontal translation by up to .5 degrees')
+    parent_parser.add_argument('--rotate', dest='rotate', type=str, default='(-0.5, 0.5)',
+                               help='data augmentation rotation by up to .5 degrees')
+    parent_parser.add_argument('--scale', dest='scale', type=str, default='(0.9, 1.1)',
+                               help='data augmentation size jitter by up to a little more than .5 degrees')
+    parent_parser.add_argument('--shear', dest='shear', type=str, default='(0.9375, 1.0625, 0.9375, 1.0625)',
+                               help='data augmentation shear jitter by up to .5 degrees')
+    parent_parser.add_argument('--brightness', dest='brightness', type=str, default='0.2',
+                               help='data augmentation brightness jitter')
+    parent_parser.add_argument('--contrast', dest='contrast', type=str, default='(0.5,1.5)',
+                               help='data augmentation contrast jitter')
+    parent_parser.add_argument('--saturation', dest='saturation', type=str, default='0.',
+                               help='data augmentation saturation jitter')
+    parent_parser.add_argument('--hue', dest='hue', type=str, default='0.',
+                               help='data augmentation hue jitter')
     parent_parser.add_argument('--window', default='7t17',
                                help='time window to average neural data over. 7t17 => 70ms through 170ms')
 

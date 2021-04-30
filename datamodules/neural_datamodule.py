@@ -13,6 +13,9 @@ from .imagenet_datamodule import ImagenetDataModule
 from .normalization import imagenet_normalization
 from .wrapper import Wrapper
 
+NEURAL_DATA_PATH = '/home/joeldapello/Code/proj_braintree/braintree-0.2/braintree'
+NEURAL_DATA_PATH = '/om2/user/dapello'
+
 class NeuralDataModule(LightningDataModule):
     name = 'NeuralData'
     """
@@ -34,6 +37,18 @@ class NeuralDataModule(LightningDataModule):
         self.num_workers = hparams.num_workers
         self.batch_size = hparams.batch_size
         self.constructor = SOURCES[hparams.neuraldataset](hparams)
+
+        # data augmentation parameters
+        self.gn_std = hparams.gaussian_noise
+        self.gb_kernel_size, self.gb_min_max_std = eval(hparams.gaussian_blur)
+        self.translate = eval(hparams.translate)
+        self.rotate = eval(hparams.rotate)
+        self.scale = eval(hparams.scale)
+        self.shear = eval(hparams.shear)
+        self.brightness = eval(hparams.brightness)
+        self.contrast = eval(hparams.contrast)
+        self.saturation = eval(hparams.saturation)
+        self.hue = eval(hparams.hue)
 
     def _get_DataLoader(self, *args, **kwargs):
         return DataLoader(*args, **kwargs)
@@ -100,12 +115,29 @@ class NeuralDataModule(LightningDataModule):
         return loader
 
     def train_transform(self):
-        preprocessing = transform_lib.Compose([
+        transforms = [
             transform_lib.ToPILImage(),
             transform_lib.Resize(self.image_size),
+            transform_lib.RandomAffine(
+                degrees=self.rotate,
+                translate=self.translate, 
+                scale=self.scale,
+                shear=self.shear,
+                fillcolor=127
+            ),
+            transform_lib.ColorJitter(
+                brightness=self.brightness,
+                contrast=self.contrast,
+                saturation=self.saturation,
+                hue=self.hue
+            ),
             transform_lib.ToTensor(),
+            transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
+            transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
             imagenet_normalization(),
-        ])
+        ]
+
+        preprocessing = transform_lib.Compose(transforms)
 
         return preprocessing
 
@@ -171,7 +203,7 @@ class NeuralDataConstructor:
 
 class KKTemporalDataConstructer(NeuralDataConstructor):
 
-    data = h5.File('/om2/user/dapello/neural_data/kk_temporal_data.h5', 'r')
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/kk_temporal_data.h5', 'r')
 
     def __init__(
         self, hparams, partition_scheme=(1100, 900, 100, 100), *args, **kwargs
@@ -181,7 +213,7 @@ class KKTemporalDataConstructer(NeuralDataConstructor):
 
     def get_stimuli(self, stimuli_partition):
         # correct flipped axes
-        X = self.data['images']['raw'][:].transpose(0,1,3,2)
+        X = self.data['images']['raw'][:].transpose(0,1,3,2)/255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
@@ -259,7 +291,7 @@ class KKTemporalDataConstructer(NeuralDataConstructor):
     
 class ManyMonkeysDataConstructer(NeuralDataConstructor):
 
-    data = h5.File('/om2/user/dapello/neural_data/many_monkeys.h5', 'r')
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/many_monkeys2.h5', 'r')
 
     def __init__(
         self, hparams, partition_scheme=(640, 540, 100, 0), *args, **kwargs
@@ -268,7 +300,7 @@ class ManyMonkeysDataConstructer(NeuralDataConstructor):
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'][:].transpose(0,3,1,2)*255
+        X = self.data['stimuli'][:].transpose(0,3,1,2)
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
@@ -335,12 +367,19 @@ class ManyMonkeysDataConstructer(NeuralDataConstructor):
     @staticmethod
     def expand(animals):
         if animals[0] == 'All':
-            animals = ['nano.right', 'nano.left', 'magneto.right', 'bento.right', 'bento.left']
+            animals = [
+                'nano.right', 'nano.left', 
+                'magneto.right', 'magneto.left', 
+                'bento.right', 'bento.left', 
+                'solo.left', 
+                'tito.right', 'tito.left', 
+                'chabo.left'
+            ]
         return animals
 
 class MajajHongDataConstructer(NeuralDataConstructor):
 
-    data = h5.File('/om2/user/dapello/neural_data/MajajHong2015.h5', 'r')
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/MajajHong2015.h5', 'r')
 
     def __init__(
         self, hparams, partition_scheme=(5760, 5184, 576, 0), *args, **kwargs
@@ -349,7 +388,7 @@ class MajajHongDataConstructer(NeuralDataConstructor):
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'][:]
+        X = self.data['stimuli'][:]/255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
@@ -431,6 +470,121 @@ class MajajHongDataConstructer(NeuralDataConstructor):
             animals = ['chabo.left', 'tito.left']
         return animals
 
+class _SachiMajajHongDataConstructer(NeuralDataConstructor):
+
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/SachiMajajHong2015.h5', 'r')
+
+    def __init__(
+        self, hparams, auth='public', partition_scheme=(3200, 2880, 320, 0), *args, **kwargs
+    ):
+        super().__init__(hparams, partition_scheme, *args, **kwargs)
+        if auth == 'private':
+            # only return private stimuli, ie HVM var = 6
+            self.idxs = self.data['var'].value == 6
+            assert partition_scheme[0] == 2560
+        elif auth == 'public':
+            # only return public stimuli, ie not HVM var = 6
+            self.idxs = self.data['var'].value != 6
+            assert partition_scheme[0] == 3200
+        elif auth == 'all':
+            # returnall HVM stimuli (there is no var = -1)
+            self.idxs = self.data['var'].value != -1
+            assert partition_scheme[0] == 5760
+        else:
+            print("SachiMajajHong2015 must be either private, public, or all!")
+            raise
+
+        self.n_heldout_neurons = 0
+
+    def get_stimuli(self, stimuli_partition):
+        X = self.data['stimuli'].value[self.idxs]/255
+        # partition the stimuli
+        X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):
+        # note, trials and time window not currently function in this implementation
+        if self.hparams.window != '7t17':
+            raise NameError('7t17 is the only time window implemented on SachiMajajHong2015')
+        if n_trials != 'All':
+            raise NameError('n_trials not implemented on SachiMajajHong2015')
+        if self.verbose:
+            print(
+                f'constructing {stimuli_partition} data with\n' +
+                f'animals:{animals}\n' +
+                f'neurons:{n_neurons}\n' +
+                f'trials:{n_trials}\n'
+            )
+        # transform "All" to all dataset's animals
+        animals = self.expand(animals)
+        n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)
+        n_trials = int(1e10) if n_trials=='All' else int(n_trials)
+        X = np.concatenate([
+            self._get_neural_responses(animal, n_trials, neuron_partition, hparams)
+            for animal in animals
+        ], axis=1)
+
+        # only return [:n_neurons] if it's not the heldout set of neurons
+        if neuron_partition == 0:
+            # should be taking a random sample not just first n. can we reuse partition neurons?
+            X = X[:, :n_neurons]
+
+        if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
+        
+        X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
+        animal, region = animal.split('.')
+        X = self.data[animal][region].value[:,self.idxs,:]
+
+        if self.verbose:
+            print(
+                f'{animal} {region} shape:\n(time_bins, stimuli, sites) : {X.shape}'
+            )
+
+        # get mean of 70 through 170 time bins
+        X = np.nanmean(X[list(range(14,24,2))], axis=0)
+
+        if self.verbose:
+            print(
+                f'{animal} {region} shape:\n(stimuli, sites) : {X.shape}'
+            )
+        """
+        get subset of neurons to fit/test on. 
+        return_heldout==0 => fitting set,
+        return_heldout==1 => heldout set
+        """
+        if self.n_heldout_neurons != 0:
+            X = self.partition_neurons(
+                X, X.shape[1]-self.n_heldout_neurons, seed=hparams.seed
+            )[neuron_partition]
+
+        #if self.verbose:
+        #    print(f'(stimuli, sites, trials) : {X.shape}')
+
+        ## take mean over trials
+        #X = X[:,:,:n_trials]
+        #X = np.nanmean(X, axis=2)
+
+        if self.verbose:
+            print(f'(stimuli, sites) : {X.shape}')
+
+        assert ~np.isnan(np.sum(X))
+        return X
+    
+    @staticmethod
+    def expand(animals):
+        if animals[0] == 'All':
+            animals = ['chabo.left', 'tito.left', 'solo.left']
+        return animals
+
+def SachiMajajHongDataConstructer(hparams):
+    return _SachiMajajHongDataConstructer(hparams, auth='all', partition_scheme=(5760, 5184, 576, 0))
+
+def SachiMajajHongPublicDataConstructer(hparams):
+    return _SachiMajajHongDataConstructer(hparams, auth='public', partition_scheme=(3200, 2880, 320, 0))
+
 class Partition:
     """ 
     generate random indices dividing data into train, test, and val sets.
@@ -485,7 +639,9 @@ class Partition:
 SOURCES = {
     'kktemporal' : KKTemporalDataConstructer,
     'manymonkeys' : ManyMonkeysDataConstructer,
-    'majajhong2015' : MajajHongDataConstructer
+    'majajhong2015' : MajajHongDataConstructer,
+    'sachimajajhong' : SachiMajajHongDataConstructer,
+    'sachimajajhongpublic' : SachiMajajHongPublicDataConstructer
 }
 
 """

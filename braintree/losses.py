@@ -9,10 +9,13 @@ class LogCenteredKernelAlignment(Module):
 
     def __init__(self):
         super(LogCenteredKernelAlignment, self).__init__()
-        self.CKA = CenteredKernelAlignment() 
             
     def forward(self, X: Tensor, Y: Tensor) -> Tensor:
-        return ch.log(CKA(X,Y))
+        assert X.shape[0] == Y.shape[0]
+        X, Y = X.view(X.shape[0], -1), Y.view(Y.shape[0], -1)
+        X = X - X.mean(dim=0)
+        Y = Y - Y.mean(dim=0)
+        return ch.log(1 - CKA(X, Y))
 
 class CenteredKernelAlignment(Module):
 
