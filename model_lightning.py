@@ -165,6 +165,8 @@ class Model_Lightning(LightningModule):
                     layers = ['module.' + region for region in ['V4']]
                 if 'IT' in benchmark_identifier:
                     layers = ['module.' + region for region in ['IT']]
+                else:
+                    layers = ['module.' + region for region in ['decoder.avgpool']]
                 score = score_model(
                     model_identifier=model_id,
                     model=self.model,

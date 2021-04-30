@@ -497,7 +497,7 @@ class _SachiMajajHongDataConstructer(NeuralDataConstructor):
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'].value[self.public]/255
+        X = self.data['stimuli'].value[self.idxs]/255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
@@ -536,7 +536,7 @@ class _SachiMajajHongDataConstructer(NeuralDataConstructor):
 
     def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
         animal, region = animal.split('.')
-        X = self.data[animal][region].value[:,self.public,:]
+        X = self.data[animal][region].value[:,self.idxs,:]
 
         if self.verbose:
             print(
