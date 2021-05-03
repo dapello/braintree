@@ -14,6 +14,7 @@ from pytorch_lightning.core import LightningModule
 
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 from braintree.benchmarks import score_model
+from models import layer_maps
 
 ########### Network Models ##############
 
@@ -40,6 +41,8 @@ class Model_Lightning(LightningModule):
     # f = fitted, u = unfitted. ie fnuerons.ustimuli => collect on fitted neurons and unfitted stimuli
     BENCHMARKS=['fneurons.fstimuli', 'fneurons.ustimuli', 'uneurons.fstimuli', 'uneurons.ustimuli']
 
+    LAYER_MAPS=layer_maps
+
     def __init__(self, hparams, dm, *args, **kwargs): 
         super().__init__()
         
@@ -53,7 +56,9 @@ class Model_Lightning(LightningModule):
         self.record_time = hparams.record_time
         self.loss_weights = hparams.loss_weights
         
+        assert self.hparams.arch in self.LAYER_MAPS
         self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
+        self.layer_map = self.LAYER_MAPS[hparams.arch]
         self.regions = self.hook_layers()
         self.neural_loss = self.neural_losses[hparams.neural_loss]()
         self.neural_val_loss = self.neural_losses[hparams.neural_val_loss]()
@@ -67,15 +72,15 @@ class Model_Lightning(LightningModule):
         return self.model(x)
 
     def hook_layers(self):
-        """
-        need to make a more generic layer committer here; this assumes layers in the net are
-        named after brain regions like CORnets
-        """
         if self.hparams.verbose: print(f'Hooking regions {self.hparams.regions}')
-        layer_hooks = {
-            f'{region}' : Hook(self.model._modules['module']._modules[region])
-            for region in self.hparams.regions
-        }
+
+        layer_hooks = {}
+
+        for region in self.hparams.regions:
+            layer = self.model.module if hasattr(self.model, 'module') else self.model
+            for id_ in self.layer_map[region].split('.'):
+                layer = getattr(layer, id_)
+                layer_hooks[region] = Hook(layer)
 
         return layer_hooks
 
@@ -104,6 +109,8 @@ class Model_Lightning(LightningModule):
                     )
                 )
 
+            # this assumes dataloader_idx is the dataloader for IT. 
+            # fine for now, but need to generalize if we wantedto fit multiple layers.
             elif dataloader_idx == 1:
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.similarity(
@@ -124,6 +131,8 @@ class Model_Lightning(LightningModule):
                 self.classification(batch, mode)
             )
 
+        # this assumes dataloader_idx is the dataloader for IT. 
+        # fine for now, but need to generalize if we wantedto fit multiple layers.
         if dataloader_idx == 1:
             losses.append(
                 self.similarity(batch, 'IT', mode)
@@ -149,24 +158,26 @@ class Model_Lightning(LightningModule):
                     Y = ch.cat(Y).cuda()
                     similarity_loss = self.similarity((X,Y), 'IT', key)
 
-                    del X, Y, similarity_loss
-                    ch.cuda.empty_cache()
+                    # we were having mem issues for a while, maybe they've been resolved?
+                    #del X, Y, similarity_loss
+                    #ch.cuda.empty_cache()
 
         if self.hparams.BS_benchmarks[0] != 'None':
             self.model.eval()
             benchmark_log = {}
             for benchmark_identifier in self.hparams.BS_benchmarks:
                 model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-gs_{self.global_step}-{time.time()}'
+                layer = 'module.' if hasattr(self.model, 'module') else ''
                 if 'V1' in benchmark_identifier:
-                    layers = ['module.' + region for region in ['V1']]
+                    layers = [layer + self.layer_map['V1']]
                 if 'V2' in benchmark_identifier:
-                    layers = ['module.' + region for region in ['V2']]
+                    layers = [layer + self.layer_map['V2']]
                 if 'V4' in benchmark_identifier:
-                    layers = ['module.' + region for region in ['V4']]
+                    layers = [layer + self.layer_map['V4']]
                 if 'IT' in benchmark_identifier:
-                    layers = ['module.' + region for region in ['IT']]
+                    layers = [layer + self.layer_map['IT']]
                 else:
-                    layers = ['module.' + region for region in ['decoder.avgpool']]
+                    layers = [layer + self.layer_map['decoder']]
                 score = score_model(
                     model_identifier=model_id,
                     model=self.model,
@@ -175,6 +186,7 @@ class Model_Lightning(LightningModule):
                 )
 
                 benchmark_log[benchmark_identifier] = score.values[0]
+                print(benchmark_log)
 
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
@@ -261,11 +273,13 @@ class Model_Lightning(LightningModule):
             }
 
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        t = ch.cuda.get_device_properties(0).total_memory
-        r = ch.cuda.memory_reserved(0) 
-        a = ch.cuda.memory_allocated(0)
-        f = r-a  # free inside reserved
-        print(f'>>>sim: total {t}, reserved {r}, allocated {a}, free {f}')
+
+        # for debugging memory issues
+        #t = ch.cuda.get_device_properties(0).total_memory
+        #r = ch.cuda.memory_reserved(0) 
+        #a = ch.cuda.memory_allocated(0)
+        #f = r-a  # free inside reserved
+        #print(f'>>>sim: total {t}, reserved {r}, allocated {a}, free {f}')
 
         return loss
 
@@ -317,7 +331,7 @@ class Model_Lightning(LightningModule):
     def add_model_specific_args(cls, parent_parser):  
         parser = argparse.ArgumentParser(parents=[parent_parser])
         parser.add_argument('--v_num', type=int)
-        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'cornet_s', 
+        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'resnet50', 
                             help='model architecture: ' + ' | '.join(MODEL_NAMES))
         parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')
