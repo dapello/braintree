@@ -67,6 +67,7 @@ class Model_Lightning(LightningModule):
         #self.valid_acc = pl.metrics.Accuracy()
 
         print('record_time = ', self.record_time)
+        #print(self.model)
         
     def forward(self, x):
         return self.model(x)
@@ -259,6 +260,7 @@ class Model_Lightning(LightningModule):
         X, Y = batch
         _ = self.model(X)
         Y_hat = self.regions[region].output
+        print('feature shape', Y_hat.shape)
 
         # this allows to test with a different loss than the train loss.
         if mode == 'train':
