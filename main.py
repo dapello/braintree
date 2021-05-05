@@ -46,6 +46,7 @@ def main(hparams):
         gpus=hparams.gpus,   
         max_epochs=hparams.epochs,   
         #num_sanity_val_steps=-1,
+        check_val_every_n_epoch=hparams.val_every,
         limit_val_batches=hparams.val_batches,
         checkpoint_callback=ckpt_callback,
         distributed_backend=hparams.distributed_backend, 
@@ -81,6 +82,8 @@ def get_args(*args):
                                help='how many model checkpoints to save. -1 for all')
     parent_parser.add_argument('--val_batches', dest='val_batches', type=int, default=0.25,
                                help='how many batches (10) / what percent (0.25) of the validation set to run.')
+    parent_parser.add_argument('--val_every', dest='val_every', type=int, default=5,
+                               help='how frequently to run the validation set.')
     parent_parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
                                help='prints more details of dataloading / etc')
     parent_parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',

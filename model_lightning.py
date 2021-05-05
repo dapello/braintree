@@ -331,7 +331,7 @@ class Model_Lightning(LightningModule):
     def add_model_specific_args(cls, parent_parser):  
         parser = argparse.ArgumentParser(parents=[parent_parser])
         parser.add_argument('--v_num', type=int)
-        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'resnet50', 
+        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'cornet_s', 
                             help='model architecture: ' + ' | '.join(MODEL_NAMES))
         parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')

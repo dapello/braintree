@@ -26,7 +26,7 @@ layer_maps = {
         'V1' : 'V1',
         'V2' : 'V2',
         'V4' : 'V4',
-        'IT' : 'V4',
+        'IT' : 'IT',
         'decoder' : 'decoder.avgpool'
     }
 }
