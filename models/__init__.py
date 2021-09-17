@@ -11,29 +11,30 @@ layer_maps = {
         'V1' : None,
         'V2' : None,
         'V4' : None,
-        'IT' : '_blocks.11',
-        'decoder' : '_blocks.15',
+        'IT' : '_blocks.15',
+        #'decoder' : '_blocks.14',
+        'decoder' : '_avg_pooling',
     },
     'mobilenet_v2' : {
         'V1' : None,
         'V2' : None,
         'V4' : None,
         'IT' : 'features.14',
-        'decoder' : 'classifier'
+        'decoder' : 'features.14'
     },
     'mobilenet_v3_large' : {
         'V1' : None,
         'V2' : None,
         'V4' : None,
         'IT' : 'features.13',
-        'decoder' : 'avgpool'
+        'decoder' : 'features.13'
     },
     'resnet18' : {
         'V1' : None,
         'V2' : None,
         'V4' : None,
         'IT' : 'layer4.1',
-        'decoder' : 'avgpool'
+        'decoder' : 'layer4.1'
     },
     'resnet50' : {
         'V1' : None,
@@ -47,6 +48,6 @@ layer_maps = {
         'V2' : 'V2',
         'V4' : 'V4',
         'IT' : 'IT',
-        'decoder' : 'decoder.avgpool'
+        'decoder' : 'IT'
     }
 }
