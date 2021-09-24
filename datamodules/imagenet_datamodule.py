@@ -9,8 +9,7 @@ import torchvision.datasets as datasets
 from torchvision import transforms as transform_lib
 from torch.utils.data.distributed import DistributedSampler
 
-from .normalization import imagenet_normalization
-from .wrapper import Wrapper
+from wrapper import Wrapper
 
 #default_Imagenet_dir = '/data/ImageNet/ILSVRC2012'
 default_Imagenet_dir = '/om/data/public/imagenet/images_complete/ilsvrc/'
@@ -84,7 +83,7 @@ class ImagenetDataModule(LightningDataModule):
             transform_lib.RandomResizedCrop(self.image_size),
             transform_lib.RandomHorizontalFlip(),
             transform_lib.ToTensor(),
-            imagenet_normalization(),
+            #imagenet_normalization(), # model does it's own normalization!
         ])
 
         return preprocessing
@@ -97,6 +96,6 @@ class ImagenetDataModule(LightningDataModule):
             transform_lib.Resize(self.image_size + 32),
             transform_lib.CenterCrop(self.image_size),
             transform_lib.ToTensor(),
-            imagenet_normalization(),
+            #imagenet_normalization(), # model does it's own normalization!
         ])
         return preprocessing

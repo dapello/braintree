@@ -14,12 +14,12 @@ from pytorch_lightning.core import LightningModule
 
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 from braintree.benchmarks import score_model
-from models import layer_maps
+from models.helpers import layer_maps, add_normalization, Hook
 
-########### Network Models ##############
-
+##### models
 import torchvision.models as torchvision_models
-import models as custom_models
+import models as custom_models ## hmmm
+
 
 models_dict = {**torchvision_models.__dict__, **custom_models.__dict__}  # Merge two dictionaries
 
@@ -28,8 +28,7 @@ MODEL_NAMES = sorted(
     if name.islower() and not name.startswith("__") and callable(models_dict[name])
 )
 
-###########
-
+#####
 
 class Model_Lightning(LightningModule):
     
@@ -63,6 +62,7 @@ class Model_Lightning(LightningModule):
         self.neural_loss = self.neural_losses[hparams.neural_loss]()
         self.neural_val_loss = self.neural_losses[hparams.neural_val_loss]()
         self.benchmarks = self.load_benchmarks()
+        self.adversaries = self.generate_adversaries()
         #self.train_acc = pl.metrics.Accuracy()
         #self.valid_acc = pl.metrics.Accuracy()
 
@@ -77,12 +77,17 @@ class Model_Lightning(LightningModule):
         layer_hooks = {}
 
         for region in self.hparams.regions:
-            layer = self.model.module if hasattr(self.model, 'module') else self.model
+            # [1] gets model instead of normalization layer [0]
+            layer = self.model.module[1] if hasattr(self.model, 'module') else self.model[1]
             for id_ in self.layer_map[region].split('.'):
                 layer = getattr(layer, id_)
                 layer_hooks[region] = Hook(layer)
 
         return layer_hooks
+
+    def generate_adversaries(self):
+        ## make class and region adversaries
+        return adversaries
 
     def train_dataloader(self):
         # pass loaders as a dict. This will create batches like this:
@@ -235,6 +240,8 @@ class Model_Lightning(LightningModule):
 
     def classification(self, batch, mode):
         X, Y = batch
+        if 'adv_' in mode:
+            X, Y = self.class_adversary.generate(X, Y, F.cross_entropy)
         Y_hat = self.model(X)
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
@@ -257,6 +264,9 @@ class Model_Lightning(LightningModule):
 
     def similarity(self, batch, region, mode):
         X, Y = batch
+        if 'adv_' in mode:
+            # not working yet, also need to supply the region, extract from that region, etc...
+            X, Y = self.class_adversary.generate(X, Y, F.cross_entropy)
         _ = self.model(X)
         Y_hat = self.regions[region].output
 
@@ -316,6 +326,7 @@ class Model_Lightning(LightningModule):
 
     @staticmethod
     def get_model(arch, pretrained, *args, **kwargs): 
+        """gets a model and prepends a normalization layer"""
         
         def dict_remove_none(kwargs):
             return {k: v for k, v in kwargs.items() if v is not None}
@@ -324,7 +335,7 @@ class Model_Lightning(LightningModule):
         # remove kwargs for torchvision_models
         kwargs = dict_remove_none(kwargs) if arch in custom_models.__dict__ else {} 
         print(f'Using pretrained model: {pretrained}')
-        model = model_arch(pretrained=pretrained, *args, **kwargs)      
+        model = add_normalization(model_arch(pretrained=pretrained, *args, **kwargs))
         return model
 
     @classmethod
@@ -356,19 +367,3 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser
-
-# extract intermediate representations
-class Hook():
-    def __init__(self, module, backward=False):
-        if backward==False:
-            self.hook = module.register_forward_hook(self.hook_fn)
-        else:
-            self.hook = module.register_backward_hook(self.hook_fn)
-        
-        self.output = None
-
-    def hook_fn(self, module, input, output):
-        self.output = output#.clone()
-
-    def close(self):
-        self.hook.remove()
