@@ -14,17 +14,8 @@ from braintree.benchmarks import list_brainscore_benchmarks
 default_save_path = "dev" 
 
 def main(hparams):
-    if hparams.seed is not None:
-        seed_everything(hparams.seed)
-        deterministic = True     
-    else: 
-        deterministic = False
-        
-    logger = TensorBoardLogger(
-        hparams.log_save_path, name=hparams.file_name, 
-        version=hparams.v_num
-    ) 
-    hparams.v_num = logger.version
+    deterministic = seed(hparams)    
+    logger = set_logger(hparams)
 
     dm = { 
         module_name : DATAMODULES[module_name](hparams)
@@ -46,6 +37,7 @@ def main(hparams):
         gpus=hparams.gpus,   
         max_epochs=hparams.epochs,   
         #num_sanity_val_steps=-1,
+        check_val_every_n_epoch=hparams.val_every,
         limit_val_batches=hparams.val_batches,
         checkpoint_callback=ckpt_callback,
         distributed_backend=hparams.distributed_backend, 
@@ -62,6 +54,60 @@ def main(hparams):
         trainer.test(model, test_dataloaders=[dm[key].val_dataloader() for key in dm])
     else:
         trainer.fit(model)
+
+def seed(hparams):
+    deterministic = False
+    if hparams.seed is not None:
+        seed_everything(hparams.seed)
+        deterministic = True     
+
+    return deterministic
+
+def set_logger(hparams):
+    logger = TensorBoardLogger(
+        hparams.log_save_path, name=hparams.file_name, 
+        version=hparams.v_num
+    ) 
+    hparams.v_num = logger.version
+
+    return logger
+
+## deprecated??
+#def get_ckpt(hparams):
+#    if hparams.v_num is None:
+#        return None 
+#    else:
+#        ckpt_path = os.path.join(
+#            hparams.log_save_path,
+#            hparams.file_name, 
+#            'version_' + str(hparams.v_num),
+#            'checkpoints'
+#        ) 
+#        return get_latest_file(ckpt_path)
+#
+#def get_latest_file(ckpt_path):
+#    files_path = os.path.join(ckpt_path, '*')
+#    list_of_ckpt = glob.glob(files_path)
+#    ckpt_sorted = sorted(
+#        list_of_ckpt, 
+#        key = lambda f: (
+#            int(f.split('-')[0].split('=')[1]), 
+#            int(f.split('-')[1].split('=')[1].split('.')[0])
+#        ),
+#        reverse = True
+#    )
+#    print(ckpt_sorted)
+#    return ckpt_sorted[0]
+
+#################
+    
+class PrintingCallback(Callback):
+    def on_epoch_start(self, trainer, pl_module):
+        print('Scheduler epoch %d' % trainer.lr_schedulers[0]['scheduler'].last_epoch)
+        print('Trainer epoch %d' % trainer.current_epoch)
+        print('-'*80)    
+
+#################
 
 def get_args(*args):
     parent_parser = argparse.ArgumentParser(add_help=False)
@@ -81,6 +127,8 @@ def get_args(*args):
                                help='how many model checkpoints to save. -1 for all')
     parent_parser.add_argument('--val_batches', dest='val_batches', type=int, default=0.25,
                                help='how many batches (10) / what percent (0.25) of the validation set to run.')
+    parent_parser.add_argument('--val_every', dest='val_every', type=int, default=5,
+                               help='how frequently to run the validation set.')
     parent_parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
                                help='prints more details of dataloading / etc')
     parent_parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
@@ -137,8 +185,6 @@ def get_args(*args):
     if args.verbose: pprint(args)
     return args 
 
-################
-
 def add_path_names(hparams):
     hparams.file_name = get_filename(hparams)
     hparams.log_save_path = os.path.join('./logs', hparams.save_path)
@@ -160,43 +206,7 @@ def get_filename(hparams):
 
     return filename
 
-def get_ckpt(hparams):
-    if hparams.v_num is None:
-        return None 
-    else:
-        ckpt_path = os.path.join(
-            hparams.log_save_path,
-            hparams.file_name, 
-            'version_' + str(hparams.v_num),
-            'checkpoints'
-        ) 
-        return get_latest_file(ckpt_path)
-
-
-def get_latest_file(ckpt_path):
-    files_path = os.path.join(ckpt_path, '*')
-    list_of_ckpt = glob.glob(files_path)
-    ckpt_sorted = sorted(
-        list_of_ckpt, 
-        key = lambda f: (
-            int(f.split('-')[0].split('=')[1]), 
-            int(f.split('-')[1].split('=')[1].split('.')[0])
-        ),
-        reverse = True
-    )
-    print(ckpt_sorted)
-    return ckpt_sorted[0]
-
-#################
-    
-class PrintingCallback(Callback):
-    def on_epoch_start(self, trainer, pl_module):
-        print('Scheduler epoch %d' % trainer.lr_schedulers[0]['scheduler'].last_epoch)
-        print('Trainer epoch %d' % trainer.current_epoch)
-        print('-'*80)    
-
-#################
-
+################
 
 if __name__ == '__main__':
     main(get_args())

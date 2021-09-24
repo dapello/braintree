@@ -21,7 +21,9 @@ def brain_wrap_model(identifier, model, layers, image_size):
     return brain_model
 
 def score_model(model_identifier, model, layers, benchmark_identifier, image_size=224):
+    import os 
     from brainscore import score_model as _score_model
+    os.environ['RESULTCACHING_DISABLE'] = 'brainscore.score_model,model_tools'
 
     brain_model = brain_wrap_model(identifier=model_identifier, model=model, layers=layers, image_size=224)
     score = _score_model(

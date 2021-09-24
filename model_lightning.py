@@ -32,24 +32,24 @@ MODEL_NAMES = sorted(
 
 class Model_Lightning(LightningModule):
     
-    neural_losses = {
+    NEURAL_LOSSES = {
         'CKA' : CenteredKernelAlignment,
         'logCKA' : LogCenteredKernelAlignment
     }
 
-    # f = fitted, u = unfitted. ie fnuerons.ustimuli => collect on fitted neurons and unfitted stimuli
+    # f = fitted, u = unfitted. ie fnuerons.ustimuli => run benchmark on fitted neurons and unfitted stimuli
+    # this should not be called BENCHMARKS, to be consistent with brainscore terminology. PARTITION maybe?
     BENCHMARKS=['fneurons.fstimuli', 'fneurons.ustimuli', 'uneurons.fstimuli', 'uneurons.ustimuli']
-
     LAYER_MAPS=layer_maps
 
     def __init__(self, hparams, dm, *args, **kwargs): 
         super().__init__()
         
+        ## is this still necessary..?
         if isinstance(hparams, dict):  
             # for load_from_checkpoint bug: which uses dict instead of namespace
             hparams = argparse.Namespace(**hparams)
             
-        
         self.dm = dm
         self.hparams = hparams
         self.record_time = hparams.record_time
@@ -59,14 +59,15 @@ class Model_Lightning(LightningModule):
         self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.layer_map = self.LAYER_MAPS[hparams.arch]
         self.regions = self.hook_layers()
-        self.neural_loss = self.neural_losses[hparams.neural_loss]()
-        self.neural_val_loss = self.neural_losses[hparams.neural_val_loss]()
+        self.neural_loss = self.NEURAL_LOSSES[hparams.neural_loss]()
+        self.neural_val_loss = self.NEURAL_LOSSES[hparams.neural_val_loss]()
         self.benchmarks = self.load_benchmarks()
         self.adversaries = self.generate_adversaries()
         #self.train_acc = pl.metrics.Accuracy()
         #self.valid_acc = pl.metrics.Accuracy()
 
         print('record_time = ', self.record_time)
+        #print(self.model)
         
     def forward(self, x):
         return self.model(x)
@@ -77,6 +78,7 @@ class Model_Lightning(LightningModule):
         layer_hooks = {}
 
         for region in self.hparams.regions:
+            # this allows us to specify layer4.downsample0.maxpool for instance to get the maxpool in layer4.downsample0
             # [1] gets model instead of normalization layer [0]
             layer = self.model.module[1] if hasattr(self.model, 'module') else self.model[1]
             for id_ in self.layer_map[region].split('.'):
@@ -115,7 +117,7 @@ class Model_Lightning(LightningModule):
                 )
 
             # this assumes dataloader_idx is the dataloader for IT. 
-            # fine for now, but need to generalize if we wantedto fit multiple layers.
+            # fine for now, but need to generalize if we wanted to fit multiple layers.
             elif dataloader_idx == 1:
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.similarity(
@@ -171,7 +173,8 @@ class Model_Lightning(LightningModule):
             self.model.eval()
             benchmark_log = {}
             for benchmark_identifier in self.hparams.BS_benchmarks:
-                model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-gs_{self.global_step}-{time.time()}'
+                model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-{int(time.time())}'
+                print('>>>', model_id)
                 layer = 'module.' if hasattr(self.model, 'module') else ''
                 if 'V1' in benchmark_identifier:
                     layers = [layer + self.layer_map['V1']]
@@ -269,18 +272,12 @@ class Model_Lightning(LightningModule):
             X, Y = self.class_adversary.generate(X, Y, F.cross_entropy)
         _ = self.model(X)
         Y_hat = self.regions[region].output
+        print('feature shape', Y_hat.shape)
 
         # this allows to test with a different loss than the train loss.
-        if mode == 'train':
-            loss = self.neural_loss(Y, Y_hat)
-            log = {
-                f'{self.neural_loss.name}_{mode}' : loss
-            }
-        else:
-            loss = self.neural_val_loss(Y, Y_hat)
-            log = {
-                f'{self.neural_val_loss.name}_{mode}' : loss
-            }
+        neural_loss_fnc = self.neural_loss if mode == 'train' else self.neural_val_loss
+        loss = neural_loss_fnc(Y, Y_hat)
+        log = {f'{neural_loss_fnc.name}_{mode}' : loss}
 
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
@@ -295,7 +292,9 @@ class Model_Lightning(LightningModule):
 
     def configure_optimizers(self):
         param_list, lr = self.parameters(), self.hparams.lr
-        lr_list = lr
+        
+        ## ???
+        #lr_list = lr
         
         optimizer = optim.SGD(
             param_list, 
@@ -342,12 +341,12 @@ class Model_Lightning(LightningModule):
     def add_model_specific_args(cls, parent_parser):  
         parser = argparse.ArgumentParser(parents=[parent_parser])
         parser.add_argument('--v_num', type=int)
-        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'resnet50', 
+        parser.add_argument('-a', '--arch', metavar='ARCH', choices=MODEL_NAMES, default = 'cornet_s', 
                             help='model architecture: ' + ' | '.join(MODEL_NAMES))
         parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')
-        parser.add_argument('--neural_loss', default='CKA', choices=cls.neural_losses.keys(), type=str)
-        parser.add_argument('--neural_val_loss', default='CKA', choices=cls.neural_losses.keys(), type=str)
+        parser.add_argument('--neural_loss', default='CKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
+        parser.add_argument('--neural_val_loss', default='CKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
         parser.add_argument('--loss_weights', nargs="*", default=[1,1], type=float,
                             help="how to weight losses; [1,1] => equal weighting of imagenet and neural loss")
         parser.add_argument('--image_size', default=224, type=int)
