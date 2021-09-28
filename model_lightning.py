@@ -14,11 +14,12 @@ from pytorch_lightning.core import LightningModule
 
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 from braintree.benchmarks import score_model
+from braintree.adversary import Adversary
 from models.helpers import layer_maps, add_normalization, Hook
 
 ##### models
 import torchvision.models as torchvision_models
-import models as custom_models ## hmmm
+import models as custom_models 
 
 
 models_dict = {**torchvision_models.__dict__, **custom_models.__dict__}  # Merge two dictionaries
@@ -88,7 +89,18 @@ class Model_Lightning(LightningModule):
         return layer_hooks
 
     def generate_adversaries(self):
-        ## make class and region adversaries
+        adversaries = {}
+        if self.hparams.adv_eval_images:
+            ## make class adversary
+            adversaries['class_adversary'] = Adversary(
+                model=self.model,
+                eps=self.hparams.eps
+            )
+
+        if self.hparams.adv_eval_neural:
+            ## make region adversaries
+            print('Neural Adversaries not implemented')
+            raise
         return adversaries
 
     def train_dataloader(self):
@@ -137,6 +149,11 @@ class Model_Lightning(LightningModule):
             losses.append(
                 self.classification(batch, mode)
             )
+            if self.hparams.adv_eval_images:
+                losses.append(
+                    self.classification(batch, f'adv_{mode}', adversarial=True)
+                )
+
 
         # this assumes dataloader_idx is the dataloader for IT. 
         # fine for now, but need to generalize if we wantedto fit multiple layers.
@@ -241,10 +258,10 @@ class Model_Lightning(LightningModule):
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
 
-    def classification(self, batch, mode):
+    def classification(self, batch, mode, adversarial=False):
         X, Y = batch
-        if 'adv_' in mode:
-            X, Y = self.class_adversary.generate(X, Y, F.cross_entropy)
+        if adversarial
+            X, Y = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy)
         Y_hat = self.model(X)
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
