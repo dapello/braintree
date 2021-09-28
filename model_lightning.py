@@ -260,7 +260,7 @@ class Model_Lightning(LightningModule):
 
     def classification(self, batch, mode, adversarial=False):
         X, Y = batch
-        if adversarial
+        if adversarial:
             X, Y = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy)
         Y_hat = self.model(X)
         loss = F.cross_entropy(Y_hat, Y)
