@@ -27,7 +27,7 @@ layer_maps = {
         'V1' : 'V1',
         'V2' : 'V2',
         'V4' : 'V4',
-        'IT' : 'V4',
+        'IT' : 'IT',
         'decoder' : 'decoder.avgpool'
     }
 }
@@ -36,8 +36,8 @@ layer_maps = {
 class Normalize(nn.Module):
     def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
         super(Normalize, self).__init__()
-        self.mean = ch.tensor(mean).reshape(3,1,1)
-        self.std = ch.tensor(std).reshape(3,1,1)
+        self.mean = ch.tensor(mean).reshape(3,1,1).cuda()
+        self.std = ch.tensor(std).reshape(3,1,1).cuda()
 
     def forward(self, x):
         x = x - self.mean

@@ -23,19 +23,20 @@ class Adversary:
     def generate(self, X, Y, loss_fnc):
         """generate stimuli maximizing loss function provided"""
         self.model.eval()
+         
+        with ch.set_grad_enabled(True):
+            X_adv = X.clone().detach().requires_grad_(True).to(X.device)
             
-        X_adv = X.clone().detach().requires_grad_(True).to(X.device)
-        
-        for i in range(self.num_steps):
-            _X_adv = X_adv.clone().detach().requires_grad_(True).to(X.device)
-            
-            # calculate gradients w.r.t. loss
-            loss_fnc(self.model(_X_adv), Y).backward()
+            for i in range(self.num_steps):
+                _X_adv = X_adv.clone().detach().requires_grad_(True).to(X.device)
+                
+                # calculate gradients w.r.t. loss
+                loss_fnc(self.model(_X_adv), Y).backward()
 
-            # step in direction to increase loss
-            X_adv = X_adv + self.step_size * _X_adv.grad.sign()
-        
-            # project onto eps sized ball, don't go outside (0,1) image bounds
-            X_adv = ch.max(ch.min(X_adv, X + self.eps), X - self.eps).clamp(*self.clamp)
+                # step in direction to increase loss
+                X_adv = X_adv + self.step_size * _X_adv.grad.sign()
+            
+                # project onto eps sized ball, don't go outside (0,1) image bounds
+                X_adv = ch.max(ch.min(X_adv, X + self.eps), X - self.eps).clamp(*self.clamp)
             
         return X_adv

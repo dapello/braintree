@@ -9,7 +9,6 @@ import torchvision.datasets as datasets
 from torchvision import transforms as transform_lib
 from torch.utils.data.distributed import DistributedSampler
 
-from wrapper import Wrapper
 
 #default_Imagenet_dir = '/data/ImageNet/ILSVRC2012'
 default_Imagenet_dir = '/om/data/public/imagenet/images_complete/ilsvrc/'
@@ -48,7 +47,6 @@ class ImagenetDataModule(LightningDataModule):
         dataset = self._get_dataset('train', transforms)
 
         loader = self._get_DataLoader(
-            #Wrapper(dataset),
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
@@ -65,7 +63,6 @@ class ImagenetDataModule(LightningDataModule):
         transforms = self.val_transform()
         dataset = self._get_dataset('val', transforms)
         loader = self._get_DataLoader(
-            #Wrapper(dataset),
             dataset,
             batch_size=self.batch_size,
             shuffle=False,

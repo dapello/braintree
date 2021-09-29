@@ -81,7 +81,8 @@ class Model_Lightning(LightningModule):
         for region in self.hparams.regions:
             # this allows us to specify layer4.downsample0.maxpool for instance to get the maxpool in layer4.downsample0
             # [1] gets model instead of normalization layer [0]
-            layer = self.model.module[1] if hasattr(self.model, 'module') else self.model[1]
+            model = self.model[1]
+            layer = model.module if hasattr(model, 'module') else model
             for id_ in self.layer_map[region].split('.'):
                 layer = getattr(layer, id_)
                 layer_hooks[region] = Hook(layer)
@@ -261,7 +262,7 @@ class Model_Lightning(LightningModule):
     def classification(self, batch, mode, adversarial=False):
         X, Y = batch
         if adversarial:
-            X, Y = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy)
+            X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy)
         Y_hat = self.model(X)
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))

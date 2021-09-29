@@ -135,7 +135,7 @@ def get_args(*args):
                                help='evaluate model on validation set')
     parent_parser.add_argument('-aei', '--adv_eval_images', dest='adv_eval_images', action='store_true',
                                help='adversarially evaluate model on validation set')
-    parent_parser.add_argument('-aen', '--adv_eval_neural', dest='adv_eval_images', action='store_true',
+    parent_parser.add_argument('-aen', '--adv_eval_neural', dest='adv_eval_neural', action='store_true',
                                help='adversarially evaluate model on CenteredKernelAlignment')
     parent_parser.add_argument('-eps', '--epsilon', dest='eps', type=float, default=1/1020,
                                help='maximum L_inf perturbation strength')
