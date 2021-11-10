@@ -8,7 +8,7 @@ class Adversary:
     TODO: update to take model output at a specified layer.
     """
     def __init__(self, model, norm='inf', eps=1/255, 
-             num_steps=16, eps_step_size=1/4, clamp=(0,1)):
+             num_steps=5, eps_step_size=1/4, clamp=(0,1)):
         
         assert norm=='inf'
             

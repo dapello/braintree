@@ -2,12 +2,26 @@ import torch as ch
 import torch.nn as nn
 
 layer_maps = {
+    'efficientnet_b0' : {
+        'V1' : None,
+        'V2' : None,
+        'V4' : None,
+        'IT' : '_blocks.15',
+        'decoder' : '_blocks.15',
+    },
     'mobilenet_v2' : {
         'V1' : None,
         'V2' : None,
         'V4' : None,
         'IT' : 'features.14',
         'decoder' : 'classifier'
+    },
+    'mobilenet_v3_large' : {
+        'V1' : None,
+        'V2' : None,
+        'V4' : None,
+        'IT' : 'features.13',
+        'decoder' : 'avgpool'
     },
     'resnet18' : {
         'V1' : None,
@@ -29,9 +43,9 @@ layer_maps = {
         'V4' : 'V4',
         'IT' : 'IT',
         'decoder' : 'decoder.avgpool'
+        #'decoder' : 'IT'
     }
 }
-
 
 class Normalize(nn.Module):
     def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):

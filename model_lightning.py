@@ -193,7 +193,7 @@ class Model_Lightning(LightningModule):
             for benchmark_identifier in self.hparams.BS_benchmarks:
                 model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-{int(time.time())}'
                 print('>>>', model_id)
-                layer = 'module.' if hasattr(self.model, 'module') else ''
+                layer = '1.module.' if hasattr(self.model[1], 'module') else '1.'
                 if 'V1' in benchmark_identifier:
                     layers = [layer + self.layer_map['V1']]
                 if 'V2' in benchmark_identifier:
@@ -380,7 +380,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--wd', '--weight-decay', metavar='W', dest='weight_decay', type=float, 
                             default = 1e-4)  # set to 1e-2 for cifar10
         parser.add_argument('--optim', dest='optim', default='sgd') # := {'sgd'}
-        parser.add_argument('--pretrained', dest='pretrained', action='store_true', default = True)
+        parser.add_argument('--pretrained', dest='pretrained', type=int, default=1)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser

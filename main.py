@@ -53,6 +53,7 @@ def main(hparams):
     if hparams.evaluate:
         trainer.test(model, test_dataloaders=[dm[key].val_dataloader() for key in dm])
     else:
+        #trainer.validate(model)
         trainer.fit(model)
 
 def seed(hparams):
@@ -127,7 +128,7 @@ def get_args(*args):
                                help='how many model checkpoints to save. -1 for all')
     parent_parser.add_argument('--val_batches', dest='val_batches', type=int, default=0.25,
                                help='how many batches (10) / what percent (0.25) of the validation set to run.')
-    parent_parser.add_argument('--val_every', dest='val_every', type=int, default=5,
+    parent_parser.add_argument('--val_every', dest='val_every', type=int, default=10,
                                help='how frequently to run the validation set.')
     parent_parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
                                help='prints more details of dataloading / etc')
