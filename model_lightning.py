@@ -81,7 +81,8 @@ class Model_Lightning(LightningModule):
         for region in self.hparams.regions:
             # this allows us to specify layer4.downsample0.maxpool for instance to get the maxpool in layer4.downsample0
             # [1] gets model instead of normalization layer [0]
-            layer = self.model.module[1] if hasattr(self.model, 'module') else self.model[1]
+            model = self.model[1]
+            layer = model.module if hasattr(model, 'module') else model
             for id_ in self.layer_map[region].split('.'):
                 layer = getattr(layer, id_)
                 layer_hooks[region] = Hook(layer)
@@ -192,7 +193,7 @@ class Model_Lightning(LightningModule):
             for benchmark_identifier in self.hparams.BS_benchmarks:
                 model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-{int(time.time())}'
                 print('>>>', model_id)
-                layer = 'module.' if hasattr(self.model, 'module') else ''
+                layer = '1.module.' if hasattr(self.model[1], 'module') else '1.'
                 if 'V1' in benchmark_identifier:
                     layers = [layer + self.layer_map['V1']]
                 if 'V2' in benchmark_identifier:
@@ -260,8 +261,8 @@ class Model_Lightning(LightningModule):
 
     def classification(self, batch, mode, adversarial=False):
         X, Y = batch
-        if adversarial
-            X, Y = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy)
+        if adversarial:
+            X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy)
         Y_hat = self.model(X)
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
@@ -379,7 +380,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--wd', '--weight-decay', metavar='W', dest='weight_decay', type=float, 
                             default = 1e-4)  # set to 1e-2 for cifar10
         parser.add_argument('--optim', dest='optim', default='sgd') # := {'sgd'}
-        parser.add_argument('--pretrained', dest='pretrained', action='store_true', default = True)
+        parser.add_argument('--pretrained', dest='pretrained', type=int, default=1)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser

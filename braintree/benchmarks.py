@@ -5,7 +5,7 @@ def wrap_model(identifier, model, image_size):
     from model_tools.activations.pytorch import PytorchWrapper
     from model_tools.activations.pytorch import load_preprocess_images
     
-    preprocessing = functools.partial(load_preprocess_images, image_size=image_size)
+    preprocessing = functools.partial(load_preprocess_images, image_size=image_size, normalize_mean=(0,0,0), normalize_std=(1,1,1))
     wrapper = PytorchWrapper(identifier=identifier, model=model, preprocessing=preprocessing)
     wrapper.image_size = image_size
     return wrapper
