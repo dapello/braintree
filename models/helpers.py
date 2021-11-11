@@ -50,12 +50,12 @@ layer_maps = {
 class Normalize(nn.Module):
     def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
         super(Normalize, self).__init__()
-        self.mean = ch.tensor(mean).reshape(3,1,1).cuda()
-        self.std = ch.tensor(std).reshape(3,1,1).cuda()
+        self.mean = ch.tensor(mean).reshape(3,1,1)#.cuda()
+        self.std = ch.tensor(std).reshape(3,1,1)#.cuda()
 
     def forward(self, x):
-        x = x - self.mean
-        x = x / self.std
+        x = x - self.mean.type_as(x)
+        x = x / self.std.type_as(x)
         return x
 
 def add_normalization(model, **kwargs):
@@ -70,9 +70,12 @@ class Hook():
             self.hook = module.register_backward_hook(self.hook_fn)
         
         self.output = None
+        #self.output = []
 
     def hook_fn(self, module, input, output):
+        print(output.shape)
         self.output = output#.clone()
+        #self.output.append(output)
 
     def close(self):
         self.hook.remove()

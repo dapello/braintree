@@ -47,12 +47,13 @@ class Model_Lightning(LightningModule):
         super().__init__()
         
         ## is this still necessary..?
-        if isinstance(hparams, dict):  
-            # for load_from_checkpoint bug: which uses dict instead of namespace
-            hparams = argparse.Namespace(**hparams)
+        #if isinstance(hparams, dict):  
+        #    # for load_from_checkpoint bug: which uses dict instead of namespace
+        #    hparams = argparse.Namespace(**hparams)
             
         self.dm = dm
-        self.hparams = hparams
+        #self.hparams = hparams
+        self.hparams.update(vars(hparams))
         self.record_time = hparams.record_time
         self.loss_weights = hparams.loss_weights
         
@@ -179,8 +180,8 @@ class Model_Lightning(LightningModule):
                     for X_, Y_ in self.benchmarks[key]:
                         X.append(X_)
                         Y.append(Y_)
-                    X = ch.cat(X).cuda()
-                    Y = ch.cat(Y).cuda()
+                    X = ch.cat(X)#.cuda()
+                    Y = ch.cat(Y)#.cuda()
                     similarity_loss = self.similarity((X,Y), 'IT', key)
 
                     # we were having mem issues for a while, maybe they've been resolved?
@@ -363,7 +364,7 @@ class Model_Lightning(LightningModule):
                             help='model architecture: ' + ' | '.join(MODEL_NAMES))
         parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')
-        parser.add_argument('--neural_loss', default='CKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
+        parser.add_argument('--neural_loss', default='logCKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
         parser.add_argument('--neural_val_loss', default='CKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
         parser.add_argument('--loss_weights', nargs="*", default=[1,1], type=float,
                             help="how to weight losses; [1,1] => equal weighting of imagenet and neural loss")

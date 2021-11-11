@@ -34,13 +34,14 @@ def main(hparams):
 
     trainer = Trainer(
         default_root_dir=hparams.log_save_path,
-        gpus=hparams.gpus,   
+        devices=hparams.gpus,   
+        accelerator='gpu',
         max_epochs=hparams.epochs,   
         #num_sanity_val_steps=-1,
         check_val_every_n_epoch=hparams.val_every,
         limit_val_batches=hparams.val_batches,
         checkpoint_callback=ckpt_callback,
-        distributed_backend=hparams.distributed_backend, 
+        #distributed_backend=hparams.distributed_backend, 
         num_nodes=hparams.num_nodes,
         logger=logger, callbacks=[lr_monitor],  #   PrintingCallback()],
         deterministic=deterministic,
@@ -73,35 +74,6 @@ def set_logger(hparams):
 
     return logger
 
-## deprecated??
-#def get_ckpt(hparams):
-#    if hparams.v_num is None:
-#        return None 
-#    else:
-#        ckpt_path = os.path.join(
-#            hparams.log_save_path,
-#            hparams.file_name, 
-#            'version_' + str(hparams.v_num),
-#            'checkpoints'
-#        ) 
-#        return get_latest_file(ckpt_path)
-#
-#def get_latest_file(ckpt_path):
-#    files_path = os.path.join(ckpt_path, '*')
-#    list_of_ckpt = glob.glob(files_path)
-#    ckpt_sorted = sorted(
-#        list_of_ckpt, 
-#        key = lambda f: (
-#            int(f.split('-')[0].split('=')[1]), 
-#            int(f.split('-')[1].split('=')[1].split('.')[0])
-#        ),
-#        reverse = True
-#    )
-#    print(ckpt_sorted)
-#    return ckpt_sorted[0]
-
-#################
-    
 class PrintingCallback(Callback):
     def on_epoch_start(self, trainer, pl_module):
         print('Scheduler epoch %d' % trainer.lr_schedulers[0]['scheduler'].last_epoch)
@@ -120,7 +92,7 @@ def get_args(*args):
                                help='how many workers')
     parent_parser.add_argument('--num_nodes', type=int, default=1,
                                help='how many nodes')
-    parent_parser.add_argument('--gpus', default=1,
+    parent_parser.add_argument('--gpus', type=int, default=1,
                                help='how many gpus')
     parent_parser.add_argument('--distributed-backend', type=str, default='dp', choices=('dp', 'ddp', 'ddp2'),
                                help='supports three options dp, ddp, ddp2')
