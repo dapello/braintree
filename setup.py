@@ -14,7 +14,7 @@ requirements = [
     "pandas",
     "h5py",
     "cornet @ git+https://github.com/dicarlolab/CORnet",
-    #"vonenet @ git+https://github.com/dicarlolab/vonenet"
+    "vonenet @ git+https://github.com/dicarlolab/vonenet"
 ]
 
 setup(
