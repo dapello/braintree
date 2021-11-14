@@ -1,4 +1,5 @@
 from cornet import *
+from vonenet import *
 
 def efficientnet_b0(pretrained=True):
     from efficientnet_pytorch import EfficientNet

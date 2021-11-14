@@ -12,13 +12,7 @@ from pytorch_lightning import LightningDataModule
 #NEURAL_DATA_PATH = '/home/joeldapello/Code/proj_braintree/braintree-0.2/braintree'
 NEURAL_DATA_PATH = '/om2/user/dapello'
 
-class NeuralDataModule(LightningDataModule):
-    name = 'NeuralData'
-    """
-    A DataLoader for neural data. uses a dataconstructer class (KKTemporal) to
-    format neural data, formats it and then returns it wrapped in a dictionary 
-    through Wrapper
-    """
+class StimuliBaseModule(LightningDataModule):
     def __init__(
         self, 
         hparams,
@@ -27,7 +21,7 @@ class NeuralDataModule(LightningDataModule):
     ):
         super().__init__(*args, **kwargs)
 
-        self.hparams = hparams
+        self.hparams.update(vars(hparams))
         self.image_size = hparams.image_size
         self.dims = (3, self.image_size, self.image_size)
         self.num_workers = hparams.num_workers
@@ -48,67 +42,6 @@ class NeuralDataModule(LightningDataModule):
 
     def _get_DataLoader(self, *args, **kwargs):
         return DataLoader(*args, **kwargs)
-    
-    def train_dataloader(self):
-        """
-        Uses the train split from provided neural data path 
-        """
-        hparams = self.hparams
-
-        X = self.constructor.get_stimuli(stimuli_partition='train').astype('float32')
-        Y = self.constructor.get_neural_responses(
-            animals=hparams.fit_animals, n_neurons=hparams.neurons,
-            n_trials=hparams.trials, neuron_partition=0, stimuli_partition='train', 
-            hparams=hparams
-        ).astype('float32')
-
-        transforms = self.train_transform() 
-
-        # number of stimuli to fit to
-        n_stimuli = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
-        dataset = CustomTensorDataset(X[:n_stimuli], Y[:n_stimuli], transforms)
-
-        loader = self._get_DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            drop_last=True,
-            pin_memory=True,
-        )
-        if self.hparams.verbose:
-            print(f'neural train set shape: {X.shape}, {Y.shape}')
-        return loader
-
-    def val_dataloader(self, stimuli_partition='test', neuron_partition=0):
-        """
-        Uses the validation split of imagenet2012 for testing
-        """
-        hparams = self.hparams
-
-        X = self.constructor.get_stimuli(stimuli_partition=stimuli_partition).astype('float32')
-        Y = self.constructor.get_neural_responses(
-            animals=hparams.test_animals, n_neurons=hparams.neurons,
-            n_trials='All', neuron_partition=neuron_partition, stimuli_partition=stimuli_partition,
-            hparams=hparams
-        ).astype('float32')
-        
-        transforms = self.val_transform()
-
-        dataset = CustomTensorDataset(X, Y, transforms)
-        
-        loader = self._get_DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=self.num_workers,
-            drop_last=False,
-            pin_memory=True
-        )
-
-        if self.hparams.verbose:
-            print(f'neural validation set shape: {X.shape}, {Y.shape}')
-        return loader
 
     def train_transform(self):
         transforms = [
@@ -146,6 +79,146 @@ class NeuralDataModule(LightningDataModule):
         ])
 
         return preprocessing
+
+    def get_stimuli(self, stimuli_partition):
+        """
+        Stimuli are always the same, it's the target that changes
+        """
+        return self.constructor.get_stimuli(stimuli_partition=stimuli_partition).astype('float32')
+
+    def get_target(self, stimuli_partition, *args, **kwargs):
+        """
+        This method is intended to be written over by the inheritting data module classes.
+        """
+        raise ValueError('The get_target method has not been overwritten on the StimuliBaseModule')
+
+    def train_dataloader(self):
+        """
+        Uses the train split from provided neural data path 
+        """
+        hparams = self.hparams
+
+        X = self.get_stimuli(stimuli_partition='train')
+        Y = self.get_target(
+            neuron_partition=0, 
+            stimuli_partition='train',
+            animals=hparams.fit_animals,
+            n_trials=hparams.trials
+        )
+        #X = self.constructor.get_stimuli(stimuli_partition='train').astype('float32')
+        #Y = self.constructor.get_neural_responses(
+        #    animals=hparams.fit_animals, n_neurons=hparams.neurons,
+        #    n_trials=hparams.trials, neuron_partition=0, stimuli_partition='train', 
+        #    hparams=hparams
+        #).astype('float32')
+
+        transforms = self.train_transform() 
+
+        # number of stimuli to fit to
+        n_stimuli = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
+        dataset = CustomTensorDataset(X[:n_stimuli], Y[:n_stimuli], transforms)
+
+        loader = self._get_DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            drop_last=True,
+            pin_memory=True,
+        )
+        return loader
+
+    def val_dataloader(self, stimuli_partition='test', neuron_partition=0):
+        """
+        Uses the validation split of imagenet2012 for testing
+        """
+        hparams = self.hparams
+
+        X = self.get_stimuli(stimuli_partition=stimuli_partition)
+        Y = self.get_target(
+            neuron_partition=neuron_partition, 
+            stimuli_partition=stimuli_partition,
+            animals=hparams.test_animals,
+            n_trials='All'
+        )
+
+        #X = self.constructor.get_stimuli(stimuli_partition=stimuli_partition).astype('float32')
+        #Y = self.constructor.get_neural_responses(
+        #    animals=hparams.test_animals, n_neurons=hparams.neurons,
+        #    n_trials='All', neuron_partition=neuron_partition, stimuli_partition=stimuli_partition,
+        #    hparams=hparams
+        #).astype('float32')
+        
+        transforms = self.val_transform()
+
+        dataset = CustomTensorDataset(X, Y, transforms)
+        
+        loader = self._get_DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+            drop_last=False,
+            pin_memory=True
+        )
+
+        if self.hparams.verbose:
+            print(f'neural validation set shape: {X.shape}, {Y.shape}')
+        return loader
+
+class NeuralDataModule(StimuliBaseModule):
+    name = 'NeuralData'
+    """
+    A DataLoader for neural data. Extends StimuliBaseModule and uses a dataconstructer class 
+    to format neural data.
+    """
+    def __init__(
+        self, 
+        hparams,
+        *args,
+        **kwargs
+    ):
+        super().__init__(hparams, *args, **kwargs)
+
+    def get_target(self, neuron_partition, stimuli_partition, animals, n_trials):
+        hparams = self.hparams
+
+        Y = self.constructor.get_neural_responses(
+            animals=animals, 
+            n_neurons=hparams.neurons,
+            n_trials=n_trials, 
+            neuron_partition=neuron_partition, 
+            stimuli_partition=stimuli_partition, 
+            hparams=hparams
+        ).astype('float32')
+
+        return Y
+
+class StimuliDataModule(StimuliBaseModule):
+    name = 'StimuliClassification'
+    """
+    A DataLoader for classifying stimuli associated with neural data. Extends 
+    StimuliBaseModule and uses a dataconstructor to format stimuli and labels.
+    """
+    def __init__(
+        self, 
+        hparams,
+        *args,
+        **kwargs
+    ):
+        super().__init__(hparams, *args, **kwargs)
+        self.class_type = 'category_name'
+
+    def get_target(self, stimuli_partition, *args, **kwargs):
+        hparams = self.hparams
+
+        Y = self.constructor.get_labels(
+            stimuli_partition=stimuli_partition,
+            class_type=self.class_type
+        )
+
+        return Y
+
 
 class CustomTensorDataset(Dataset):
     """
@@ -188,6 +261,10 @@ class NeuralDataConstructor:
         raise NameError('Method not implemented')
 
     def get_neural_responses(self, *args, **kwargs):
+        # overwrite method with dataset specific operations
+        raise NameError('Method not implemented')
+
+    def get_labels(self, *args, **kwargs):
         # overwrite method with dataset specific operations
         raise NameError('Method not implemented')
 
@@ -373,6 +450,7 @@ class ManyMonkeysDataConstructer(NeuralDataConstructor):
             ]
         return animals
 
+### deprecated -- just use SachiMajajHong constructor instead
 class MajajHongDataConstructer(NeuralDataConstructor):
 
     data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/MajajHong2015.h5', 'r')
@@ -496,6 +574,20 @@ class _SachiMajajHongDataConstructer(NeuralDataConstructor):
         X = self.data['stimuli'].value[self.idxs]/255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def get_labels(self, stimuli_partition, class_type):
+        # get data
+        X = self.data['category_name'].value
+
+        # get labels and label map
+        labels = np.unique(X)
+        label_map = {label:i for i,label in enumerate(labels)}
+
+        # convert X to label numbers and partition
+        X = np.array([label_map[x] for x in X])
+        X_Partitioned = self.partition(X)[stimuli_partition]
+
         return X_Partitioned
 
     def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):

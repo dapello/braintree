@@ -7,10 +7,18 @@ class LogCenteredKernelAlignment(Module):
 
     name = 'logCKA'
 
-    def __init__(self):
+    def __init__(self, device='gpu'):
         super(LogCenteredKernelAlignment, self).__init__()
+        self.device=device
             
     def forward(self, X: Tensor, Y: Tensor) -> Tensor:
+        if self.device == 'gpu':
+            X = X.cuda()
+            Y = Y.cuda()
+        elif self.device == 'cpu':
+            X = X.cpu()
+            Y = Y.cpu()
+
         assert X.shape[0] == Y.shape[0]
         X, Y = X.view(X.shape[0], -1), Y.view(Y.shape[0], -1)
         X = X - X.mean(dim=0)
@@ -21,10 +29,18 @@ class CenteredKernelAlignment(Module):
 
     name = 'CKA'
 
-    def __init__(self):
+    def __init__(self, device='gpu'):
         super(CenteredKernelAlignment, self).__init__()
+        self.device=device
             
     def forward(self, X: Tensor, Y: Tensor) -> Tensor:
+        if self.device == 'gpu':
+            X = X.cuda()
+            Y = Y.cuda()
+        elif self.device == 'cpu':
+            X = X.cpu()
+            Y = Y.cpu()
+
         assert X.shape[0] == Y.shape[0]
         X, Y = X.view(X.shape[0], -1), Y.view(Y.shape[0], -1)
         X = X - X.mean(dim=0)

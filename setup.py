@@ -7,14 +7,14 @@ with open('README.md') as readme_file:
     readme = readme_file.read()
 
 requirements = [
-    "pytorch-lightning==1.2.10",
+    "pytorch-lightning==1.5.1",
     "torch==1.8.1",
     "torchvision",
     "numpy",
     "pandas",
     "h5py",
     "cornet @ git+https://github.com/dicarlolab/CORnet",
-    #"vonenet @ git+https://github.com/dicarlolab/vonenet"
+    "vonenet @ git+https://github.com/dicarlolab/vonenet"
 ]
 
 setup(

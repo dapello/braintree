@@ -20,7 +20,7 @@ class Adversary:
         self.step_size = eps_step_size*eps
         self.clamp = clamp
         
-    def generate(self, X, Y, loss_fnc):
+    def generate(self, X, Y, loss_fnc, output_inds=[0,1000]):
         """generate stimuli maximizing loss function provided"""
         self.model.eval()
          
@@ -31,7 +31,7 @@ class Adversary:
                 _X_adv = X_adv.clone().detach().requires_grad_(True).to(X.device)
                 
                 # calculate gradients w.r.t. loss
-                loss_fnc(self.model(_X_adv), Y).backward()
+                loss_fnc(self.model(_X_adv)[output_inds[0]:output_inds[1]], Y).backward()
 
                 # step in direction to increase loss
                 X_adv = X_adv + self.step_size * _X_adv.grad.sign()

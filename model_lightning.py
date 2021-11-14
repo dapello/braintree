@@ -2,6 +2,7 @@ import os, glob, time
 from collections import OrderedDict
 import argparse
 
+import psutil
 import numpy as np
 import torch as ch
 import torch.nn as nn
@@ -15,13 +16,13 @@ from pytorch_lightning.core import LightningModule
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 from braintree.benchmarks import score_model
 from braintree.adversary import Adversary
-from models.helpers import layer_maps, add_normalization, Hook
+from models.helpers import layer_maps, add_normalization, add_outputs, Hook
 
 ##### models
 import torchvision.models as torchvision_models
 import models as custom_models 
 
-
+process = psutil.Process()
 models_dict = {**torchvision_models.__dict__, **custom_models.__dict__}  # Merge two dictionaries
 
 MODEL_NAMES = sorted(
@@ -47,18 +48,19 @@ class Model_Lightning(LightningModule):
         super().__init__()
         
         ## is this still necessary..?
-        if isinstance(hparams, dict):  
-            # for load_from_checkpoint bug: which uses dict instead of namespace
-            hparams = argparse.Namespace(**hparams)
+        #if isinstance(hparams, dict):  
+        #    # for load_from_checkpoint bug: which uses dict instead of namespace
+        #    hparams = argparse.Namespace(**hparams)
             
         self.dm = dm
-        self.hparams = hparams
+        #self.hparams = hparams
+        self.hparams.update(vars(hparams))
         self.record_time = hparams.record_time
         self.loss_weights = hparams.loss_weights
         
         assert self.hparams.arch in self.LAYER_MAPS
-        self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.layer_map = self.LAYER_MAPS[hparams.arch]
+        self.model = self.get_model(hparams.arch, pretrained=hparams.pretrained, *args, **kwargs)
         self.regions = self.hook_layers()
         self.neural_loss = self.NEURAL_LOSSES[hparams.neural_loss]()
         self.neural_val_loss = self.NEURAL_LOSSES[hparams.neural_val_loss]()
@@ -138,6 +140,13 @@ class Model_Lightning(LightningModule):
                     )
                 )
 
+            elif dataloader_idx == 2:
+                losses.append(
+                    self.loss_weights[dataloader_idx]*self.classification(
+                        batch_, 'train', output_inds=[1000, 1008], dataset='Stimuli'
+                    )
+                )
+
         return sum(losses)
     
     def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
@@ -179,8 +188,8 @@ class Model_Lightning(LightningModule):
                     for X_, Y_ in self.benchmarks[key]:
                         X.append(X_)
                         Y.append(Y_)
-                    X = ch.cat(X).cuda()
-                    Y = ch.cat(Y).cuda()
+                    X = ch.cat(X)#.cuda()
+                    Y = ch.cat(Y)#.cuda()
                     similarity_loss = self.similarity((X,Y), 'IT', key)
 
                     # we were having mem issues for a while, maybe they've been resolved?
@@ -259,27 +268,21 @@ class Model_Lightning(LightningModule):
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
 
-    def classification(self, batch, mode, adversarial=False):
+    def classification(self, batch, mode, output_inds=[0,1000], dataset='ImageNet', adversarial=False):
         X, Y = batch
+        Y = Y.long()
         if adversarial:
-            X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy)
-        Y_hat = self.model(X)
+            X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy, output_inds=output_inds)
+        Y_hat = self.model(X)[:, output_inds[0]:output_inds[1]]
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
 
         log = {
-            f'{mode}_loss' : loss,
-            f'{mode}_acc1' : acc1,
-            f'{mode}_acc5' : acc5
+            f'{dataset}_{mode}_loss' : loss,
+            f'{dataset}_{mode}_acc1' : acc1,
+            f'{dataset}_{mode}_acc5' : acc5
         }
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-
-        #if mode == 'train':
-        #    self.train_acc(Y_hat, Y)
-        #    self.log('train_acc', self.train_acc, on_step=True, on_epoch=False)
-        #elif mode == 'val':
-        #    self.valid_acc(Y_hat, Y)
-        #    self.log('valid_acc', self.valid_acc, on_step=True, on_epoch=True)
 
         return loss
 
@@ -341,8 +344,7 @@ class Model_Lightning(LightningModule):
             res = [correct[:k].sum().item()/total for k in topk]
             return res
 
-    @staticmethod
-    def get_model(arch, pretrained, *args, **kwargs): 
+    def get_model(self, arch, pretrained, *args, **kwargs): 
         """gets a model and prepends a normalization layer"""
         
         def dict_remove_none(kwargs):
@@ -352,7 +354,9 @@ class Model_Lightning(LightningModule):
         # remove kwargs for torchvision_models
         kwargs = dict_remove_none(kwargs) if arch in custom_models.__dict__ else {} 
         print(f'Using pretrained model: {pretrained}')
-        model = add_normalization(model_arch(pretrained=pretrained, *args, **kwargs))
+        model = model_arch(pretrained=pretrained, *args, **kwargs)
+        model = add_normalization(model)
+        model = add_outputs(model, out_name=self.layer_map['output'], n_outputs=8)
         return model
 
     @classmethod
@@ -363,10 +367,10 @@ class Model_Lightning(LightningModule):
                             help='model architecture: ' + ' | '.join(MODEL_NAMES))
         parser.add_argument('--regions', choices=['V1', 'V2', 'V4', 'IT'], nargs="*", default=['IT'], 
                             help='which CORnet layer to match')
-        parser.add_argument('--neural_loss', default='CKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
+        parser.add_argument('--neural_loss', default='logCKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
         parser.add_argument('--neural_val_loss', default='CKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
-        parser.add_argument('--loss_weights', nargs="*", default=[1,1], type=float,
-                            help="how to weight losses; [1,1] => equal weighting of imagenet and neural loss")
+        parser.add_argument('--loss_weights', nargs="*", default=[1,1,1], type=float,
+                            help="how to weight losses; [1,1,1] => equal weighting of imagenet, neural loss, and stimuli classification")
         parser.add_argument('--image_size', default=224, type=int)
         parser.add_argument('--epochs', default=150, type=int, metavar='N')
         parser.add_argument('-b', '--batch-size', type=int, metavar='N', default = 128, 
