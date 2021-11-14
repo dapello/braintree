@@ -2,6 +2,7 @@ import os, glob, time
 from collections import OrderedDict
 import argparse
 
+import psutil
 import numpy as np
 import torch as ch
 import torch.nn as nn
@@ -21,7 +22,7 @@ from models.helpers import layer_maps, add_normalization, add_outputs, Hook
 import torchvision.models as torchvision_models
 import models as custom_models 
 
-
+process = psutil.Process()
 models_dict = {**torchvision_models.__dict__, **custom_models.__dict__}  # Merge two dictionaries
 
 MODEL_NAMES = sorted(

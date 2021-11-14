@@ -21,7 +21,6 @@ class StimuliBaseModule(LightningDataModule):
     ):
         super().__init__(*args, **kwargs)
 
-        #self.hparams = hparams
         self.hparams.update(vars(hparams))
         self.image_size = hparams.image_size
         self.dims = (3, self.image_size, self.image_size)
@@ -127,8 +126,6 @@ class StimuliBaseModule(LightningDataModule):
             drop_last=True,
             pin_memory=True,
         )
-        if self.hparams.verbose:
-            print(f'neural train set shape: {X.shape}, {Y.shape}')
         return loader
 
     def val_dataloader(self, stimuli_partition='test', neuron_partition=0):

@@ -88,7 +88,7 @@ def get_args(*args):
                                 help='seed for initializing training. ')
     parent_parser.add_argument('--save_path', metavar='DIR', type=str, default=default_save_path, 
                                help='path to save output')
-    parent_parser.add_argument('--num_workers', type=int, default=16,
+    parent_parser.add_argument('--num_workers', type=int, default=4,
                                help='how many workers')
     parent_parser.add_argument('--num_nodes', type=int, default=1,
                                help='how many nodes')
@@ -115,7 +115,7 @@ def get_args(*args):
 
     # data specific arguments. maybe move to DATAMODULES like MODELS?
     parent_parser.add_argument('-d', '--datamodule', dest='datamodule', nargs='+', 
-                               default=['ImageNet', 'NeuralData'], choices=DATAMODULES.keys(), 
+                               default=['ImageNet', 'NeuralData', 'StimuliClassification'], choices=DATAMODULES.keys(), 
                                help='which datamodule to use.')
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='manymonkeys',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
