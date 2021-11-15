@@ -114,10 +114,6 @@ class Model_Lightning(LightningModule):
 
         return loaders
 
-#    def on_epoch_start(self, *args, **kwargs):
-#    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
-#        import pdb; pdb.set_trace()
-
     def training_step(self, batch, batch_idx):
         losses = []
         for dataloader_idx, batch_ in enumerate(batch):
