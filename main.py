@@ -136,6 +136,8 @@ def get_args(*args):
                                help='how many of the train stimuli to fit to')
     parent_parser.add_argument('-t', '--trials', dest='trials', default='All',
                                help='how many trials of stimuli presentation to average over')
+    parent_parser.add_argument('-ntt', '--neural-train-transform', dest='neural_train_transform', type=int, default=1,
+                               help='if 1, train with input aug on neural data; if 0, no input aug')
     parent_parser.add_argument('-gn', '--gaussian-noise', dest='gaussian_noise', type=float, default=0.01,
                                help='data augmentation with Gaussian noise')
     parent_parser.add_argument('-gb', '--gaussian-blur', dest='gaussian_blur', type=str, default='3,(0.1,3.0)',

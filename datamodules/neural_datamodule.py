@@ -29,6 +29,7 @@ class StimuliBaseModule(LightningDataModule):
         self.constructor = SOURCES[hparams.neuraldataset](hparams)
 
         # data augmentation parameters
+        self.neural_train_transform = hparams.neural_train_transform
         self.gn_std = hparams.gaussian_noise
         self.gb_kernel_size, self.gb_min_max_std = eval(hparams.gaussian_blur)
         self.translate = eval(hparams.translate)
@@ -44,27 +45,36 @@ class StimuliBaseModule(LightningDataModule):
         return DataLoader(*args, **kwargs)
 
     def train_transform(self):
-        transforms = [
-            transform_lib.ToPILImage(),
-            transform_lib.Resize(self.image_size),
-            transform_lib.RandomAffine(
-                degrees=self.rotate,
-                translate=self.translate, 
-                scale=self.scale,
-                shear=self.shear,
-                fillcolor=127
-            ),
-            transform_lib.ColorJitter(
-                brightness=self.brightness,
-                contrast=self.contrast,
-                saturation=self.saturation,
-                hue=self.hue
-            ),
-            transform_lib.ToTensor(),
-            transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
-            transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
-            #imagenet_normalization(),
-        ]
+        if self.neural_train_transform:
+            print('Using transforms on neural training data')
+            transforms = [
+                transform_lib.ToPILImage(),
+                transform_lib.Resize(self.image_size),
+                transform_lib.RandomAffine(
+                    degrees=self.rotate,
+                    translate=self.translate, 
+                    scale=self.scale,
+                    shear=self.shear,
+                    fillcolor=127
+                ),
+                transform_lib.ColorJitter(
+                    brightness=self.brightness,
+                    contrast=self.contrast,
+                    saturation=self.saturation,
+                    hue=self.hue
+                ),
+                transform_lib.ToTensor(),
+                transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
+                transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
+                #imagenet_normalization(),
+            ]
+        else:
+            print('No transforms on neural training data')
+            transforms = [
+                transform_lib.ToPILImage(),
+                transform_lib.Resize(self.image_size),
+                transform_lib.ToTensor()
+            ]
 
         preprocessing = transform_lib.Compose(transforms)
 
