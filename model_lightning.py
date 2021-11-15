@@ -47,11 +47,6 @@ class Model_Lightning(LightningModule):
     def __init__(self, hparams, dm, *args, **kwargs): 
         super().__init__()
         
-        ## is this still necessary..?
-        #if isinstance(hparams, dict):  
-        #    # for load_from_checkpoint bug: which uses dict instead of namespace
-        #    hparams = argparse.Namespace(**hparams)
-            
         self.dm = dm
         #self.hparams = hparams
         self.hparams.update(vars(hparams))
@@ -66,11 +61,9 @@ class Model_Lightning(LightningModule):
         self.neural_val_loss = self.NEURAL_LOSSES[hparams.neural_val_loss]()
         self.benchmarks = self.load_benchmarks()
         self.adversaries = self.generate_adversaries()
-        #self.train_acc = pl.metrics.Accuracy()
-        #self.valid_acc = pl.metrics.Accuracy()
 
         print('record_time = ', self.record_time)
-        #print(self.model)
+        self.save_hyperparameters()
         
     def forward(self, x):
         return self.model(x)
@@ -120,6 +113,10 @@ class Model_Lightning(LightningModule):
         loaders = [self.dm[key].val_dataloader() for key in self.dm if "ImageNet" in key]
 
         return loaders
+
+#    def on_epoch_start(self, *args, **kwargs):
+#    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+#        import pdb; pdb.set_trace()
 
     def training_step(self, batch, batch_idx):
         losses = []
