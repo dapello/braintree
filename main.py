@@ -55,7 +55,7 @@ def main(hparams):
     if hparams.evaluate:
         trainer.test(model, test_dataloaders=[dm[key].val_dataloader() for key in dm])
     else:
-        #trainer.validate(model)
+        trainer.validate(model)
         trainer.fit(model)
 
 def seed(hparams):
