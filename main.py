@@ -28,8 +28,9 @@ def main(hparams):
 
     ckpt_callback = ModelCheckpoint(
         verbose = hparams.verbose,
-        monitor='val_loss',
-        save_top_k = hparams.save_top_k
+        #monitor='val_loss',
+        save_last=True,
+        #save_top_k = hparams.save_top_k
     )
 
     trainer = Trainer(

@@ -12,18 +12,23 @@ from model_tools.activations.pytorch import PytorchWrapper, load_preprocess_imag
 
 
 def main():
-	# an example path to model weights
-	identifier = 'test_model'
-	path_to_weights = 'trained_models/CORnetS-188_neurons-2592_stimuli.ckpt'
-	stimuli_path = 'stimuli/shined'
-
-	model = load_model(path_to_weights, loc='cpu')
-	wrapped_model = wrap_model(model, identifier)
-	layers = ['1.module.'+layer for layer in ['V1', 'V2', 'V4', 'IT', 'decoder.avgpool']]
-	#layers = ['1.module.decoder.avgpool']
-	features = extract_features(wrapped_model, layers, path=stimuli_path)
-	save_features(features, identifier, stimuli_path)
-
+    # an example path to model weights
+    identifier = 'manymonkeys_btCORnet_S'
+    path_to_weights = 'trained_models/model_cornet_s-loss_logCKA-ds_manymonkeys-fanimals_All-tanimals_All-regions_IT-trials_All-neurons_All-stimuli_640.ckpt'
+    #identifier = 'btCORnet_S'
+    #path_to_weights = 'trained_models/model_cornet_s-loss_logCKA-ds_sachimajajhong-fanimals_All-tanimals_All-regions_IT-trials_All-neurons_188-stimuli_5760.ckpt'
+    #identifier = 'CORnet_S_control'
+    #path_to_weights = 'trained_models/model_cornet_s-control.ckpt'
+    stimuli_path = 'stimuli/shined'
+    print(f'Extracting {stimuli_path} features from {identifier} at {path_to_weights}')
+    
+    model = load_model(path_to_weights, loc='cpu')
+    wrapped_model = wrap_model(model, identifier)
+    layers = ['1.module.'+layer for layer in ['V1', 'V2', 'V4', 'IT', 'decoder.avgpool']]
+    #layers = ['1.module.decoder.avgpool']
+    features = extract_features(wrapped_model, layers, path=stimuli_path)
+    save_features(features, identifier, stimuli_path)
+    
 # this normalization preprocessor makes the model take in images with pixel ranges between [0-1]
 class Normalize(nn.Module):
     def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
@@ -49,6 +54,11 @@ def load_model(path_to_weights, loc='cpu'):
     # load weights and strip pesky 'model.' prefix
     state_dict = ch.load(path_to_weights, map_location=ch.device(loc))
     weights = {k.replace('model.', '') :v for k,v in state_dict['state_dict'].items()}
+    #weights['1.module.decoder.linear.weight'] = model[1].module.decoder.linear.weight
+    #weights['1.module.decoder.linear.bias'] = model[1].module.decoder.linear.bias
+
+
+    import pdb; pdb.set_trace()
 
     # load the architecture with the trained model weights
     model.load_state_dict(weights)
@@ -64,7 +74,7 @@ def wrap_model(model, identifier, image_size=224):
 def extract_features(wrapped_model, layers, path):
     files = np.sort([os.path.join(path, f) for f in os.listdir(path)])
     X = load_preprocess_images(files, image_size=224, normalize_mean=(0,0,0), normalize_std=(1,1,1))
-    print('feature details: min:{X.min()}, max:{X.max()}, shape:{X.shape}')
+    print(f'feature details: min:{X.min()}, max:{X.max()}, shape:{X.shape}')
     
     activations = wrapped_model.get_activations(X, layer_names=layers)
     activations['files'] = np.array([os.path.basename(file) for file in files]).astype('S10')
@@ -76,8 +86,10 @@ def save_features(features, identifier, stimuli_path):
     f = h5.File(save_path, 'w')
     
     for key in features.keys():
-        f.create_dataset(key, data=features[key])
+        f.create_dataset(key.split('.')[-1], data=features[key])
     
     f.close()
 
 
+if __name__ == '__main__':
+    main()
