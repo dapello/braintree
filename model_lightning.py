@@ -116,6 +116,7 @@ class Model_Lightning(LightningModule):
 
     def training_step(self, batch, batch_idx):
         losses = []
+
         for dataloader_idx, batch_ in enumerate(batch):
             if dataloader_idx == 0:
                 losses.append(
@@ -264,11 +265,16 @@ class Model_Lightning(LightningModule):
     def classification(self, batch, mode, output_inds=[0,1000], dataset='ImageNet', adversarial=False):
         X, Y = batch
         Y = Y.long()
+        loss=0
         if adversarial:
             X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy, output_inds=output_inds)
+
         Y_hat = self.model(X)[:, output_inds[0]:output_inds[1]]
+
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
+        if mode == 'train':
+            pass
 
         log = {
             f'{dataset}_{mode}_loss' : loss,

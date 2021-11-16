@@ -126,7 +126,7 @@ class StimuliBaseModule(LightningDataModule):
 
         # number of stimuli to fit to
         n_stimuli = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
-        dataset = CustomTensorDataset(X[:n_stimuli], Y[:n_stimuli], transforms)
+        dataset = CustomTensorDataset((X[:n_stimuli], Y[:n_stimuli]), transforms)
 
         loader = self._get_DataLoader(
             dataset,
@@ -161,7 +161,7 @@ class StimuliBaseModule(LightningDataModule):
         
         transforms = self.val_transform()
 
-        dataset = CustomTensorDataset(X, Y, transforms)
+        dataset = CustomTensorDataset((X, Y), transforms)
         
         loader = self._get_DataLoader(
             dataset,
@@ -233,11 +233,33 @@ class StimuliDataModule(StimuliBaseModule):
 class CustomTensorDataset(Dataset):
     """
     TensorDataset with support of transforms.
+
+    __getitem__ operates with any index through modulo
+    """
+    def __init__(self, data, transform=None):
+        assert all([data[0].shape[0] == datum.shape[0] for datum in data])
+        self.data = [ch.Tensor(datum) for datum in data]
+        self.transform = transform
+
+    def __getitem__(self, index):
+        # modulo index by length of data, so that we can any index
+        N = self.__len__()
+        index = int(index%N)
+        
+        datum = [datum[index] for datum in self.data]
+        datum[0] = self.transform(datum[0])
+        return datum
+
+    def __len__(self):
+        return self.data[0].size(0)
+
+class OldCustomTensorDataset(Dataset):
+    """
+    TensorDataset with support of transforms.
     takes    
         Stimuli : nd.array,
         Target : nd.array
     and returns [transform(stimuli), target]
-
     __getitem__ operates with any index through modulo
     """
     def __init__(self, X, Y, transform=None):
