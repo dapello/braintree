@@ -27,6 +27,7 @@ class StimuliBaseModule(LightningDataModule):
         self.num_workers = hparams.num_workers
         self.batch_size = hparams.batch_size
         self.constructor = SOURCES[hparams.neuraldataset](hparams)
+        self.n_stimuli = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
 
         # data augmentation parameters
         self.neural_train_transform = hparams.neural_train_transform
@@ -94,7 +95,11 @@ class StimuliBaseModule(LightningDataModule):
         """
         Stimuli are always the same, it's the target that changes
         """
-        return self.constructor.get_stimuli(stimuli_partition=stimuli_partition).astype('float32')
+        X = self.constructor.get_stimuli(
+            stimuli_partition=stimuli_partition
+        ).astype('float32')[:self.n_stimuli]
+
+        return X
 
     def get_target(self, stimuli_partition, *args, **kwargs):
         """
@@ -115,18 +120,8 @@ class StimuliBaseModule(LightningDataModule):
             animals=hparams.fit_animals,
             n_trials=hparams.trials
         )
-        #X = self.constructor.get_stimuli(stimuli_partition='train').astype('float32')
-        #Y = self.constructor.get_neural_responses(
-        #    animals=hparams.fit_animals, n_neurons=hparams.neurons,
-        #    n_trials=hparams.trials, neuron_partition=0, stimuli_partition='train', 
-        #    hparams=hparams
-        #).astype('float32')
 
-        transforms = self.train_transform() 
-
-        # number of stimuli to fit to
-        n_stimuli = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
-        dataset = CustomTensorDataset((X[:n_stimuli], Y[:n_stimuli]), transforms)
+        dataset = CustomTensorDataset((X, *Y), self.train_transform())
 
         loader = self._get_DataLoader(
             dataset,
@@ -152,16 +147,7 @@ class StimuliBaseModule(LightningDataModule):
             n_trials='All'
         )
 
-        #X = self.constructor.get_stimuli(stimuli_partition=stimuli_partition).astype('float32')
-        #Y = self.constructor.get_neural_responses(
-        #    animals=hparams.test_animals, n_neurons=hparams.neurons,
-        #    n_trials='All', neuron_partition=neuron_partition, stimuli_partition=stimuli_partition,
-        #    hparams=hparams
-        #).astype('float32')
-        
-        transforms = self.val_transform()
-
-        dataset = CustomTensorDataset((X, Y), transforms)
+        dataset = CustomTensorDataset((X, *Y), self.train_transform())
         
         loader = self._get_DataLoader(
             dataset,
@@ -173,7 +159,7 @@ class StimuliBaseModule(LightningDataModule):
         )
 
         if self.hparams.verbose:
-            print(f'neural validation set shape: {X.shape}, {Y.shape}')
+            print(f'neural validation set shape: {X.shape}, {[y.shape for y in Y]}')
         return loader
 
 class NeuralDataModule(StimuliBaseModule):
@@ -200,9 +186,43 @@ class NeuralDataModule(StimuliBaseModule):
             neuron_partition=neuron_partition, 
             stimuli_partition=stimuli_partition, 
             hparams=hparams
-        ).astype('float32')
+        ).astype('float32')[:self.n_stimuli]
 
-        return Y
+        return (Y,)
+
+class NeuralDataModule2(StimuliBaseModule):
+    name = 'NeuralData'
+    """
+    A DataLoader for neural data. Extends StimuliBaseModule and uses a dataconstructer class 
+    to format neural data.
+    """
+    def __init__(
+        self, 
+        hparams,
+        *args,
+        **kwargs
+    ):
+        super().__init__(hparams, *args, **kwargs)
+
+    def get_target(self, neuron_partition, stimuli_partition, animals, n_trials):
+        hparams = self.hparams
+
+        # neural responses
+        H = self.constructor.get_neural_responses(
+            animals=animals, 
+            n_neurons=hparams.neurons,
+            n_trials=n_trials, 
+            neuron_partition=neuron_partition, 
+            stimuli_partition=stimuli_partition, 
+            hparams=hparams
+        ).astype('float32')[:self.n_stimuli]
+
+        Y = self.constructor.get_labels(
+            stimuli_partition=stimuli_partition,
+            class_type=self.class_type
+        )[:self.n_stimuli]
+
+        return (H, Y)
 
 class StimuliDataModule(StimuliBaseModule):
     name = 'StimuliClassification'
@@ -225,9 +245,9 @@ class StimuliDataModule(StimuliBaseModule):
         Y = self.constructor.get_labels(
             stimuli_partition=stimuli_partition,
             class_type=self.class_type
-        )
+        )[:self.n_stimuli]
 
-        return Y
+        return (Y,)
 
 
 class CustomTensorDataset(Dataset):

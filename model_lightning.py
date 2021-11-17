@@ -114,8 +114,24 @@ class Model_Lightning(LightningModule):
 
         return loaders
 
+   # def train_dataloader(self):
+   #     # pass loaders as a dict. This will create batches like this:
+   #     # {'a': batch from loader_a, 'b': batch from loader_b}
+   #     loaders = {key : self.dm[key].train_dataloader() for key in self.dm}
+   #     # loaders = [self.dm[key].train_dataloader() for key in self.dm]
+
+   #     return loaders
+
+   # def val_dataloader(self):
+   #     loaders = {key : self.dm[key].val_dataloader() for key in self.dm}
+
+   #     # loaders = [self.dm[key].val_dataloader() for key in self.dm if "ImageNet" in key]
+
+   #     return loaders
+
     def training_step(self, batch, batch_idx):
         losses = []
+        #import pdb; pdb.set_trace()
 
         for dataloader_idx, batch_ in enumerate(batch):
             if dataloader_idx == 0:
@@ -128,18 +144,26 @@ class Model_Lightning(LightningModule):
             # this assumes dataloader_idx is the dataloader for IT. 
             # fine for now, but need to generalize if we wanted to fit multiple layers.
             elif dataloader_idx == 1:
+                self.model.eval()
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.similarity(
                         batch_, 'IT', 'train'
                     )
                 )
+                self.model.train()
 
             elif dataloader_idx == 2:
+                self.model.eval()
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.classification(
                         batch_, 'train', output_inds=[1000, 1008], dataset='Stimuli'
                     )
                 )
+                self.model.train()
+
+        #loss = self.loss_weights[0]*self.classification(batch[0], 'train')
+        #loss += self.loss_weights[1]*self.similarity(batch[1], 'IT', 'train')
+        #return loss
 
         return sum(losses)
     
@@ -290,9 +314,9 @@ class Model_Lightning(LightningModule):
         if 'adv_' in mode:
             # not working yet, also need to supply the region, extract from that region, etc...
             X, Y = self.class_adversary.generate(X, Y, F.cross_entropy)
+
         _ = self.model(X)
         Y_hat = self.regions[region].output
-        print('feature shape', Y_hat.shape)
 
         # this allows to test with a different loss than the train loss.
         neural_loss_fnc = self.neural_loss if mode == 'train' else self.neural_val_loss
