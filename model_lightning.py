@@ -144,22 +144,22 @@ class Model_Lightning(LightningModule):
             # this assumes dataloader_idx is the dataloader for IT. 
             # fine for now, but need to generalize if we wanted to fit multiple layers.
             elif dataloader_idx == 1:
-                self.model.eval()
+                if not self.hparams.adapt_bn_to_stim: self.model.eval()
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.similarity(
                         batch_, 'IT', 'train'
                     )
                 )
-                self.model.train()
+                if not self.hparams.adapt_bn_to_stim: self.model.train()
 
             elif dataloader_idx == 2:
-                self.model.eval()
+                if not self.hparams.adapt_bn_to_stim: self.model.eval()
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.classification(
                         batch_, 'train', output_inds=[1000, 1008], dataset='Stimuli'
                     )
                 )
-                self.model.train()
+                if not self.hparams.adapt_bn_to_stim: self.model.train()
 
         #loss = self.loss_weights[0]*self.classification(batch[0], 'train')
         #loss += self.loss_weights[1]*self.similarity(batch[1], 'IT', 'train')
@@ -408,6 +408,7 @@ class Model_Lightning(LightningModule):
                             default = 1e-4)  # set to 1e-2 for cifar10
         parser.add_argument('--optim', dest='optim', default='sgd') # := {'sgd'}
         parser.add_argument('--pretrained', dest='pretrained', type=int, default=1)
+        parser.add_argument('--adapt_bn_to_stim', dest='adapt_bn_to_stim', type=int, default=0)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser
