@@ -143,7 +143,7 @@ class Model_Lightning(LightningModule):
 
             # this assumes dataloader_idx is the dataloader for IT. 
             # fine for now, but need to generalize if we wanted to fit multiple layers.
-            elif dataloader_idx == 1:
+            elif (dataloader_idx == 1) & (self.loss_weights[dataloader_idx] != 0):
                 if not self.hparams.adapt_bn_to_stim: self.model.eval()
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.similarity(
@@ -152,7 +152,7 @@ class Model_Lightning(LightningModule):
                 )
                 if not self.hparams.adapt_bn_to_stim: self.model.train()
 
-            elif dataloader_idx == 2:
+            elif (dataloader_idx == 2) & (self.loss_weights[dataloader_idx] != 0):
                 if not self.hparams.adapt_bn_to_stim: self.model.eval()
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.classification(
@@ -223,11 +223,11 @@ class Model_Lightning(LightningModule):
                 layer = '1.module.' if hasattr(self.model[1], 'module') else '1.'
                 if 'V1' in benchmark_identifier:
                     layers = [layer + self.layer_map['V1']]
-                if 'V2' in benchmark_identifier:
+                elif 'V2' in benchmark_identifier:
                     layers = [layer + self.layer_map['V2']]
-                if 'V4' in benchmark_identifier:
+                elif 'V4' in benchmark_identifier:
                     layers = [layer + self.layer_map['V4']]
-                if 'IT' in benchmark_identifier:
+                elif 'IT' in benchmark_identifier:
                     layers = [layer + self.layer_map['IT']]
                 else:
                     layers = [layer + self.layer_map['decoder']]
@@ -239,7 +239,7 @@ class Model_Lightning(LightningModule):
                 )
 
                 benchmark_log[benchmark_identifier] = score.values[0]
-                print(benchmark_log)
+                if self.hparams.verbose: print(f'layers: {layers}, {benchmark_log}')
 
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
@@ -289,7 +289,6 @@ class Model_Lightning(LightningModule):
     def classification(self, batch, mode, output_inds=[0,1000], dataset='ImageNet', adversarial=False):
         X, Y = batch
         Y = Y.long()
-        loss=0
         if adversarial:
             X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy, output_inds=output_inds)
 
@@ -392,7 +391,7 @@ class Model_Lightning(LightningModule):
                             help='which CORnet layer to match')
         parser.add_argument('--neural_loss', default='logCKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
         parser.add_argument('--neural_val_loss', default='CKA', choices=cls.NEURAL_LOSSES.keys(), type=str)
-        parser.add_argument('--loss_weights', nargs="*", default=[1,1,1], type=float,
+        parser.add_argument('--loss_weights', nargs="*", default=[1,1,0], type=float,
                             help="how to weight losses; [1,1,1] => equal weighting of imagenet, neural loss, and stimuli classification")
         parser.add_argument('--image_size', default=224, type=int)
         parser.add_argument('--epochs', default=150, type=int, metavar='N')
@@ -408,7 +407,7 @@ class Model_Lightning(LightningModule):
                             default = 1e-4)  # set to 1e-2 for cifar10
         parser.add_argument('--optim', dest='optim', default='sgd') # := {'sgd'}
         parser.add_argument('--pretrained', dest='pretrained', type=int, default=1)
-        parser.add_argument('--adapt_bn_to_stim', dest='adapt_bn_to_stim', type=int, default=0)
+        parser.add_argument('-adapt', '--adapt_bn_to_stim', dest='adapt_bn_to_stim', type=int, default=0)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser
