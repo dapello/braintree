@@ -99,9 +99,9 @@ def get_args(*args):
                                help='supports three options dp, ddp, ddp2')
     parent_parser.add_argument('--save_top_k', dest='save_top_k', type=int, default=1,
                                help='how many model checkpoints to save. -1 for all')
-    parent_parser.add_argument('--val_batches', dest='val_batches', type=int, default=0.05,
+    parent_parser.add_argument('--val_batches', dest='val_batches', type=int, default=0.1,
                                help='how many batches (10) / what percent (0.25) of the validation set to run.')
-    parent_parser.add_argument('--val_every', dest='val_every', type=int, default=10,
+    parent_parser.add_argument('--val_every', dest='val_every', type=int, default=20,
                                help='how frequently to run the validation set.')
     parent_parser.add_argument('-v', '--verbose', dest='verbose', action='store_true',
                                help='prints more details of dataloading / etc')
