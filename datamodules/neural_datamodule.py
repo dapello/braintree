@@ -606,15 +606,15 @@ class _SachiMajajHongDataConstructer(NeuralDataConstructor):
         super().__init__(hparams, partition_scheme, *args, **kwargs)
         if auth == 'private':
             # only return private stimuli, ie HVM var = 6
-            self.idxs = self.data['var'].value == 6
+            self.idxs = self.data['var'][()] == 6
             assert partition_scheme[0] == 2560
         elif auth == 'public':
             # only return public stimuli, ie not HVM var = 6
-            self.idxs = self.data['var'].value != 6
+            self.idxs = self.data['var'][()] != 6
             assert partition_scheme[0] == 3200
         elif auth == 'all':
             # returnall HVM stimuli (there is no var = -1)
-            self.idxs = self.data['var'].value != -1
+            self.idxs = self.data['var'][()] != -1
             assert partition_scheme[0] == 5760
         else:
             print("SachiMajajHong2015 must be either private, public, or all!")
@@ -623,14 +623,14 @@ class _SachiMajajHongDataConstructer(NeuralDataConstructor):
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'].value[self.idxs]/255
+        X = self.data['stimuli'][()][self.idxs]/255
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
 
     def get_labels(self, stimuli_partition, class_type):
         # get data
-        X = self.data['category_name'].value
+        X = self.data['category_name'][()]
 
         # get labels and label map
         labels = np.unique(X)
@@ -676,7 +676,7 @@ class _SachiMajajHongDataConstructer(NeuralDataConstructor):
 
     def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
         animal, region = animal.split('.')
-        X = self.data[animal][region].value[:,self.idxs,:]
+        X = self.data[animal][region][()][:,self.idxs,:]
 
         if self.verbose:
             print(
