@@ -80,7 +80,10 @@ class Model_Lightning(LightningModule):
             layer = model.module if hasattr(model, 'module') else model
             for id_ in self.layer_map[region].split('.'):
                 layer = getattr(layer, id_)
-                layer_hooks[region] = Hook(layer)
+                if f'{region}_temp' in self.layer_map.keys():
+                    layer_hooks[region] = Hook(layer, *self.layer_map[f'{region}_temp'])
+                else:
+                    layer_hooks[region] = Hook(layer)
 
         return layer_hooks
 
@@ -368,7 +371,6 @@ class Model_Lightning(LightningModule):
 
     def get_model(self, arch, pretrained, *args, **kwargs): 
         """gets a model and prepends a normalization layer"""
-        
         def dict_remove_none(kwargs):
             return {k: v for k, v in kwargs.items() if v is not None}
 
