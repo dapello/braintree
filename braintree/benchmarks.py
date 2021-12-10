@@ -19,14 +19,13 @@ def cornet_s_brainmodel(identifier, model, image_size):
     # map region -> (time_start, time_step_size, timesteps)
     time_mappings = CORNET_S_TIMEMAPPING
 
-    preprocessing = functools.partial(load_preprocess_images, image_size=image_size, normalize_mean=(0,0,0), normalize_std=(1,1,1))
-    wrapper = TemporalPytorchWrapper(identifier=identifier, model=model, preprocessing=preprocessing,
-                                     separate_time=True)
+    preprocessing = functools.partial(load_preprocess_images, image_size=image_size)
+    wrapper = TemporalPytorchWrapper(identifier=identifier, model=model[1].module, preprocessing=preprocessing, separate_time=True)
     wrapper.image_size = image_size
 
     return CORnetCommitment(identifier=identifier, activations_model=wrapper,
-                            layers=['1.module.V1.output-t0'] +
-                                   [f'1.module.{area}.output-t{timestep}'
+                            layers=['V1.output-t0'] +
+                                   [f'{area}.output-t{timestep}'
                                     for area, timesteps in [('V2', range(2)), ('V4', range(4)), ('IT', range(2))]
                                     for timestep in timesteps] +
                                    ['decoder.avgpool-t0'],
@@ -48,7 +47,6 @@ def score_model(model_identifier, model, benchmark_identifier, layers=[], image_
     os.environ['RESULTCACHING_DISABLE'] = 'brainscore.score_model,model_tools'
 
     if 'cornet' in model_identifier:
-        print('wrapping CORnet model')
         brain_model = cornet_s_brainmodel(identifier=model_identifier, model=model, image_size=image_size)
     else:
         brain_model = brain_wrap_model(identifier=model_identifier, model=model, layers=layers, image_size=224)
