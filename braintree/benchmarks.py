@@ -10,6 +10,28 @@ def wrap_model(identifier, model, image_size):
     wrapper.image_size = image_size
     return wrapper
 
+def cornet_s_brainmodel(identifier, model, image_size):
+    import functools
+    from candidate_models.base_models.cornet import TemporalPytorchWrapper
+    from candidate_models.model_commitments.cornets import CORnetCommitment, CORNET_S_TIMEMAPPING, _build_time_mappings
+    from model_tools.activations.pytorch import load_preprocess_images
+
+    # map region -> (time_start, time_step_size, timesteps)
+    time_mappings = CORNET_S_TIMEMAPPING
+
+    preprocessing = functools.partial(load_preprocess_images, image_size=image_size, normalize_mean=(0,0,0), normalize_std=(1,1,1))
+    wrapper = TemporalPytorchWrapper(identifier=identifier, model=model, preprocessing=preprocessing,
+                                     separate_time=True)
+    wrapper.image_size = image_size
+
+    return CORnetCommitment(identifier=identifier, activations_model=wrapper,
+                            layers=['1.module.V1.output-t0'] +
+                                   [f'1.module.{area}.output-t{timestep}'
+                                    for area, timesteps in [('V2', range(2)), ('V4', range(4)), ('IT', range(2))]
+                                    for timestep in timesteps] +
+                                   ['decoder.avgpool-t0'],
+                            time_mapping=_build_time_mappings(time_mappings))
+
 def brain_wrap_model(identifier, model, layers, image_size):
     from model_tools.brain_transformation import ModelCommitment
 
@@ -20,12 +42,17 @@ def brain_wrap_model(identifier, model, layers, image_size):
     
     return brain_model
 
-def score_model(model_identifier, model, layers, benchmark_identifier, image_size=224):
+def score_model(model_identifier, model, benchmark_identifier, layers=[], image_size=224):
     import os 
     from brainscore import score_model as _score_model
     os.environ['RESULTCACHING_DISABLE'] = 'brainscore.score_model,model_tools'
 
-    brain_model = brain_wrap_model(identifier=model_identifier, model=model, layers=layers, image_size=224)
+    if 'cornet' in model_identifier:
+        print('wrapping CORnet model')
+        brain_model = cornet_s_brainmodel(identifier=model_identifier, model=model, image_size=image_size)
+    else:
+        brain_model = brain_wrap_model(identifier=model_identifier, model=model, layers=layers, image_size=224)
+
     score = _score_model(
         model_identifier=model_identifier, model=brain_model, 
         benchmark_identifier=benchmark_identifier
