@@ -38,18 +38,20 @@ layer_maps = {
         'decoder' : 'avgpool'
     },
     'cornet_s' : {
-        'V1' : 'V1',
-        'V2' : 'V2',
-        'V4' : 'V4',
-        'IT' : 'IT',
+        'V1' : 'V1.output',
+        'V2' : 'V2.output',
+        'V4' : 'V4.output',
+        'IT' : 'IT.output',
+        'IT_temp' : {'time_steps' : 2, 'output_step' : 1},
         'decoder' : 'decoder.avgpool',
         'output' : 'decoder.linear'
     },
     'vonecornet_s' : {
-        'V1' : 'V1',
-        'V2' : 'V2',
-        'V4' : 'V4',
-        'IT' : 'IT',
+        'V1' : 'V1.output',
+        'V2' : 'V2.output',
+        'V4' : 'V4.output',
+        'IT' : 'IT.output',
+        'IT_temp' : {'time_steps' : 2, 'output_step' : 1},
         'decoder' : 'decoder.avgpool',
         'output' : 'decoder.linear'
     },
@@ -102,18 +104,32 @@ def add_outputs(model, out_name, n_outputs=8, verbose=False):
 
 # extract intermediate representations
 class Hook():
-    def __init__(self, module, backward=False):
+    """#### DON'T USE THIS WITH MULTIPLE GPUs!! ####"""
+    def __init__(self, module, backward=False, time_steps=1, output_step=1):
         if backward==False:
             self.hook = module.register_forward_hook(self.hook_fn)
         else:
             self.hook = module.register_backward_hook(self.hook_fn)
         
+        self.time_steps = time_steps
+        self.output_step = output_step
+        self.counter = 0
         self.output = None
-        #self.output = []
 
     def hook_fn(self, module, input, output):
-        self.output = output#.clone()
-        #self.output.append(output)
+        """
+		works with multiple timesteps, ie CORnet-S
+		if it's one step (standard) the counter will restart every time and the same
+		output will be written every time.
+		if time_steps is > 1, the counter will count to timesteps before restarting,
+		and only the matching output_step will be written to output.
+        """
+        self.counter += 1
+        if self.counter == self.output_step:
+            self.output = output
+            
+        if self.counter == self.time_steps:
+            self.counter = 0
 
     def close(self):
         self.hook.remove()

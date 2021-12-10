@@ -13,6 +13,7 @@ requirements = [
     "numpy",
     "pandas",
     "h5py",
+    "psutil",
     "cornet @ git+https://github.com/dicarlolab/CORnet",
     "vonenet @ git+https://github.com/dicarlolab/vonenet"
 ]
