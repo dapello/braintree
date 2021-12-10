@@ -78,12 +78,14 @@ class Model_Lightning(LightningModule):
             # [1] gets model instead of normalization layer [0]
             model = self.model[1]
             layer = model.module if hasattr(model, 'module') else model
+            # iteratively find layer to hook
             for id_ in self.layer_map[region].split('.'):
                 layer = getattr(layer, id_)
-                if f'{region}_temp' in self.layer_map.keys():
-                    layer_hooks[region] = Hook(layer, *self.layer_map[f'{region}_temp'])
-                else:
-                    layer_hooks[region] = Hook(layer)
+
+            if f'{region}_temp' in self.layer_map.keys():
+                layer_hooks[region] = Hook(layer, **self.layer_map[f'{region}_temp'])
+            else:
+                layer_hooks[region] = Hook(layer)
 
         return layer_hooks
 
