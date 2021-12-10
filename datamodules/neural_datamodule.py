@@ -131,6 +131,8 @@ class StimuliBaseModule(LightningDataModule):
             drop_last=True,
             pin_memory=True,
         )
+        if self.hparams.verbose:
+            print(f'neural train set shape: {X.shape}, {[y.shape for y in Y]}')
         return loader
 
     def val_dataloader(self, stimuli_partition='test', neuron_partition=0):
