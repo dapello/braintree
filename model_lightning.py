@@ -316,8 +316,8 @@ class Model_Lightning(LightningModule):
     def similarity(self, batch, region, mode):
         X, Y = batch
         if 'adv_' in mode:
-            # not working yet, also need to supply the region, extract from that region, etc...
-            X, Y = self.class_adversary.generate(X, Y, F.cross_entropy)
+            # adversarially attack on labels. requires HVM readouts to be trained.
+            X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy, output_inds=[1000,1008])
 
         _ = self.model(X)
         Y_hat = self.regions[region].output
