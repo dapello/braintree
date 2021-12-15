@@ -135,9 +135,9 @@ class StimuliBaseModule(LightningDataModule):
             print(f'neural train set shape: {X.shape}, {[y.shape for y in Y]}')
         return loader
 
-    def val_dataloader(self, stimuli_partition='test', neuron_partition=0):
+    def val_dataloader(self, stimuli_partition='test', neuron_partition=0, batch_size=None):
         """
-        Uses the validation split of imagenet2012 for testing
+        Uses the validation split of neural data
         """
         hparams = self.hparams
 
@@ -150,10 +150,11 @@ class StimuliBaseModule(LightningDataModule):
         )
 
         dataset = CustomTensorDataset((X, *Y), self.train_transform())
-        
+
+        batch_size_ = batch_size if batch_size is not None else self.batch_size
         loader = self._get_DataLoader(
             dataset,
-            batch_size=self.batch_size,
+            batch_size=batch_size_,
             shuffle=False,
             num_workers=self.num_workers,
             drop_last=False,
@@ -205,6 +206,7 @@ class NeuralDataModule2(StimuliBaseModule):
         **kwargs
     ):
         super().__init__(hparams, *args, **kwargs)
+        self.class_type = 'category_name'
 
     def get_target(self, neuron_partition, stimuli_partition, animals, n_trials):
         hparams = self.hparams

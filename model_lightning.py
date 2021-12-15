@@ -100,8 +100,10 @@ class Model_Lightning(LightningModule):
 
         if self.hparams.adv_eval_neural:
             ## make region adversaries
-            print('Neural Adversaries not implemented')
-            raise
+            adversaries['neural_adversary'] = Adversary(
+                model=self.model,
+                eps=self.hparams.eps
+            )
         return adversaries
 
     def train_dataloader(self):
@@ -166,10 +168,6 @@ class Model_Lightning(LightningModule):
                 )
                 if not self.hparams.adapt_bn_to_stim: self.model.train()
 
-        #loss = self.loss_weights[0]*self.classification(batch[0], 'train')
-        #loss += self.loss_weights[1]*self.similarity(batch[1], 'IT', 'train')
-        #return loss
-
         return sum(losses)
     
     def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
@@ -187,14 +185,6 @@ class Model_Lightning(LightningModule):
                     self.classification(batch, f'adv_{mode}', adversarial=True)
                 )
 
-
-        # this assumes dataloader_idx is the dataloader for IT. 
-        # fine for now, but need to generalize if we wantedto fit multiple layers.
-        if dataloader_idx == 1:
-            losses.append(
-                self.similarity(batch, 'IT', mode)
-            )
-
         return sum(losses)
 
     def validation_epoch_end(self, outputs):
@@ -204,20 +194,33 @@ class Model_Lightning(LightningModule):
         # [heldout neurons, fitted stimuli] # dm.val_loader(stimuli_partion='train', neuron_partition=1) 
         # [heldout neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=1) 
         if 'NeuralData' in self.dm.keys():
+            ch.cuda.empty_cache()
             with ch.no_grad():
                 self.model.eval()
+                # loop over benchmarks (here, dataloaders)
                 for key in self.benchmarks:
-                    X, Y = [], []
-                    for X_, Y_ in self.benchmarks[key]:
-                        X.append(X_)
-                        Y.append(Y_)
-                    X = ch.cat(X)#.cuda()
-                    Y = ch.cat(Y)#.cuda()
-                    similarity_loss = self.similarity((X,Y), 'IT', key)
+                    # draw the data from the data loader (large batch_size => 1 batch for validation)
+                    for batch in self.benchmarks[key]:
+                        pass
+
+                    # score the model on the data. similarity function will take care of logging here.
+                    self.similarity(batch, 'IT', key)
+ 
+                    # and similarity on adversarially attacked stimuli
+                    if self.hparams.adv_eval_neural:
+                        self.similarity(batch, 'IT', f'adv_{key}', adversarial=True)
+
+                    # and classification of HVM stimuli, if fitting HVM labels
+                    if self.hparams.loss_weights[2] > 0:
+                        self.classification(batch, 'val', output_inds=[1000,1008], dataset='Stimuli', adversarial=False)
+
+                        # and also adversarial classification of HVM stimuli
+                        if self.hparams.adv_eval_images:
+                            self.classification(batch, 'adv_val', output_inds=[1000,1008], dataset='Stimuli', adversarial=True)
 
                     # we were having mem issues for a while, maybe they've been resolved?
-                    #del X, Y, similarity_loss
-                    #ch.cuda.empty_cache()
+                    del batch
+                    ch.cuda.empty_cache()
 
         if self.hparams.BS_benchmarks[0] != 'None':
             self.model.eval()
@@ -249,7 +252,9 @@ class Model_Lightning(LightningModule):
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
     def load_benchmarks(self):
+        # benchmark loaders use very large batch_size
         benchmarks = {}
+        batch_size = 10000
         if 'NeuralData' in self.dm.keys():
             if self.hparams.benchmarks[0] == 'All':
                 self.hparams.benchmarks = self.BENCHMARKS
@@ -259,7 +264,7 @@ class Model_Lightning(LightningModule):
                     print('\nvalidating on fitted neurons and fitted stimuli')
 
                 benchmarks['fneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
-                    stimuli_partition='train', neuron_partition=0
+                    stimuli_partition='train', neuron_partition=0, batch_size=batch_size
                 )
                 
             if 'fneurons.ustimuli' in self.hparams.benchmarks:
@@ -267,7 +272,7 @@ class Model_Lightning(LightningModule):
                     print('\nvalidating on fitted neurons and unfitted stimuli')
 
                 benchmarks['fneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
-                    stimuli_partition='test', neuron_partition=0
+                    stimuli_partition='test', neuron_partition=0, batch_size=batch_size
                 )
 
             if 'uneurons.fstimuli' in self.hparams.benchmarks:
@@ -275,7 +280,7 @@ class Model_Lightning(LightningModule):
                     print('\nvalidating on unfitted neurons and fitted stimuli')
                 
                 benchmarks['uneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
-                    stimuli_partition='train', neuron_partition=1
+                    stimuli_partition='train', neuron_partition=1, batch_size=batch_size
                 )
 
             if 'uneurons.ustimuli' in self.hparams.benchmarks:
@@ -283,7 +288,7 @@ class Model_Lightning(LightningModule):
                     print('\nvalidating on unfitted neurons and unfitted stimuli')
                 
                 benchmarks['uneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
-                    stimuli_partition='test', neuron_partition=1
+                    stimuli_partition='test', neuron_partition=1, batch_size=batch_size
                 )
 
         return benchmarks
@@ -292,8 +297,17 @@ class Model_Lightning(LightningModule):
         return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
 
     def classification(self, batch, mode, output_inds=[0,1000], dataset='ImageNet', adversarial=False):
-        X, Y = batch
-        Y = Y.long()
+        if len(batch) == 3:
+            # batches from neural dataloader
+            X, H, Y = batch
+        elif len(batch) == 2:
+            # batches from imagenet dataloader
+            X, Y = batch
+        else:
+            raise NameError(f'Unexpected batch length {len(batch)}!')
+
+        Y = Y.long().cuda()
+
         if adversarial:
             X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy, output_inds=output_inds)
 
@@ -301,6 +315,7 @@ class Model_Lightning(LightningModule):
 
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
+
         if mode == 'train':
             pass
 
@@ -313,18 +328,26 @@ class Model_Lightning(LightningModule):
 
         return loss
 
-    def similarity(self, batch, region, mode):
-        X, Y = batch
-        if 'adv_' in mode:
+    def similarity(self, batch, region, mode, adversarial=False):
+        if len(batch) == 3:
+            X, H, Y = batch
+            Y = Y.long()
+        elif len(batch) == 2:
+            X, H = batch
+        else:
+            raise NameError(f'Unexpected batch length {len(batch)}!')
+
+        if adversarial:
+            print('adversarial similarity')
             # adversarially attack on labels. requires HVM readouts to be trained.
-            X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy, output_inds=[1000,1008])
+            X = self.adversaries['neural_adversary'].generate(X, Y, F.cross_entropy, output_inds=[1000,1008])
 
         _ = self.model(X)
-        Y_hat = self.regions[region].output
+        H_hat = self.regions[region].output
 
         # this allows to test with a different loss than the train loss.
         neural_loss_fnc = self.neural_loss if mode == 'train' else self.neural_val_loss
-        loss = neural_loss_fnc(Y, Y_hat)
+        loss = neural_loss_fnc(H, H_hat)
         log = {f'{neural_loss_fnc.name}_{mode}' : loss}
 
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
