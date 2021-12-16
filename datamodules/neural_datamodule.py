@@ -136,6 +136,7 @@ class StimuliBaseModule(LightningDataModule):
         return loader
 
     def val_dataloader(self, stimuli_partition='test', neuron_partition=0, batch_size=None):
+        ## add custom animal / other info spec for custom val sets specified in `load_benchmarks`
         """
         Uses the validation split of neural data
         """
@@ -418,20 +419,45 @@ class KKTemporalDataConstructer(NeuralDataConstructor):
             animals = ['nano.right', 'nano.left', 'magneto.right']
         return animals
     
-class ManyMonkeysDataConstructer(NeuralDataConstructor):
+def ManyMonkeysDataConstructer(hparams):
+    return _ManyMonkeysDataConstructer(hparams)
+
+def ManyMonkeysValDataConstructer(hparams):
+    return _ManyMonkeysDataConstructer(hparams)
+
+class _ManyMonkeysDataConstructer(NeuralDataConstructor):
 
     data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/many_monkeys2.h5', 'r')
 
     def __init__(
-        self, hparams, partition_scheme=(640, 540, 100, 0), *args, **kwargs
+        self, hparams, variations='All', partition_scheme=(640, 540, 100, 0), *args, **kwargs
     ):
         super().__init__(hparams, partition_scheme, *args, **kwargs)
+        if variations == 'All':
+            # return all stimuli
+            self.idxs = np.array(range(len(data['var'][()])))
+            assert partition_scheme[0] == 640
+        if variations == 3:
+            self.idxs = self.data['var'][()] == 3
+            assert partition_scheme[0] == 320
+        if variations == 6:
+            self.idxs = self.data['var'][()] == 6
+            assert partition_scheme[0] == 320
+
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
         X = self.data['stimuli'][:].transpose(0,3,1,2)
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def get_labels(self, stimuli_partition, class_type):
+        # get label data -- already converted into integers corresponding to HVM category labels
+        X = self.data['category_name_HVM_aligned'][()]
+
+        X_Partitioned = self.partition(X)[stimuli_partition]
+
         return X_Partitioned
 
     def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):
@@ -783,6 +809,7 @@ class Partition:
 SOURCES = {
     'kktemporal' : KKTemporalDataConstructer,
     'manymonkeys' : ManyMonkeysDataConstructer,
+    'manymonkeys_val' : ManyMonkeysValDataConstructer,
     'majajhong2015' : MajajHongDataConstructer,
     'sachimajajhong' : SachiMajajHongDataConstructer,
     'sachimajajhongpublic' : SachiMajajHongPublicDataConstructer

@@ -253,6 +253,7 @@ class Model_Lightning(LightningModule):
 
     def load_benchmarks(self):
         # benchmark loaders use very large batch_size
+        # add custom val benchmark here.
         benchmarks = {}
         batch_size = 10000
         if 'NeuralData' in self.dm.keys():
