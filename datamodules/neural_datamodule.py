@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch as ch
 import h5py as h5
+import argparse
 
 import torchvision
 from torchvision import transforms as transform_lib
@@ -16,17 +17,25 @@ class StimuliBaseModule(LightningDataModule):
     def __init__(
         self, 
         hparams,
+        neuraldataset=None,
+        num_workers=None,
         *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
+        neuraldataset = neuraldataset if neuraldataset is not None else hparams.neuraldataset
+        num_workers = num_workers if num_workers is not None else hparams.num_workers
 
-        self.hparams.update(vars(hparams))
+        if isinstance(hparams, argparse.Namespace):
+            self.hparams.update(vars(hparams))
+        else:
+            self.hparams.update(hparams)
+
         self.image_size = hparams.image_size
         self.dims = (3, self.image_size, self.image_size)
-        self.num_workers = hparams.num_workers
+        self.num_workers = num_workers
         self.batch_size = hparams.batch_size
-        self.constructor = SOURCES[hparams.neuraldataset](hparams)
+        self.constructor = SOURCES[neuraldataset](hparams)
         self.n_stimuli = int(1e10) if hparams.stimuli=='All' else int(hparams.stimuli)
 
         # data augmentation parameters
@@ -135,27 +144,27 @@ class StimuliBaseModule(LightningDataModule):
             print(f'neural train set shape: {X.shape}, {[y.shape for y in Y]}')
         return loader
 
-    def val_dataloader(self, stimuli_partition='test', neuron_partition=0, batch_size=None):
-        ## add custom animal / other info spec for custom val sets specified in `load_benchmarks`
+    def val_dataloader(self, stimuli_partition='test', neuron_partition=0, animals=None, batch_size=None):
         """
         Uses the validation split of neural data
         """
         hparams = self.hparams
+        animals = animals if animals is not None else hparams.test_animals
+        batch_size = batch_size if batch_size is not None else self.batch_size
 
         X = self.get_stimuli(stimuli_partition=stimuli_partition)
         Y = self.get_target(
             neuron_partition=neuron_partition, 
             stimuli_partition=stimuli_partition,
-            animals=hparams.test_animals,
+            animals=animals,
             n_trials='All'
         )
 
         dataset = CustomTensorDataset((X, *Y), self.train_transform())
 
-        batch_size_ = batch_size if batch_size is not None else self.batch_size
         loader = self._get_DataLoader(
             dataset,
-            batch_size=batch_size_,
+            batch_size=batch_size,
             shuffle=False,
             num_workers=self.num_workers,
             drop_last=False,
@@ -423,7 +432,7 @@ def ManyMonkeysDataConstructer(hparams):
     return _ManyMonkeysDataConstructer(hparams)
 
 def ManyMonkeysValDataConstructer(hparams):
-    return _ManyMonkeysDataConstructer(hparams)
+    return _ManyMonkeysDataConstructer(hparams, variations=6, partition_scheme=(320,0,320,0))
 
 class _ManyMonkeysDataConstructer(NeuralDataConstructor):
 
@@ -447,14 +456,14 @@ class _ManyMonkeysDataConstructer(NeuralDataConstructor):
         self.n_heldout_neurons = 0
 
     def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'][:].transpose(0,3,1,2)
+        X = self.data['stimuli'][()][self.idxs].transpose(0,3,1,2)
         # partition the stimuli
         X_Partitioned = self.partition(X)[stimuli_partition]
         return X_Partitioned
 
     def get_labels(self, stimuli_partition, class_type):
         # get label data -- already converted into integers corresponding to HVM category labels
-        X = self.data['category_name_HVM_aligned'][()]
+        X = self.data['category_name_HVM_aligned'][()][self.idxs]
 
         X_Partitioned = self.partition(X)[stimuli_partition]
 
@@ -489,7 +498,7 @@ class _ManyMonkeysDataConstructer(NeuralDataConstructor):
 
     def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
         animal, region = animal.split('.')
-        X = self.data[animal][region]['rates']
+        X = self.data[animal][region]['rates'][()][self.idxs]
 
         if self.verbose:
             print(
@@ -532,100 +541,6 @@ class _ManyMonkeysDataConstructer(NeuralDataConstructor):
             ]
         return animals
 
-### deprecated -- just use SachiMajajHong constructor instead
-class MajajHongDataConstructer(NeuralDataConstructor):
-
-    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/MajajHong2015.h5', 'r')
-
-    def __init__(
-        self, hparams, partition_scheme=(5760, 5184, 576, 0), *args, **kwargs
-    ):
-        super().__init__(hparams, partition_scheme, *args, **kwargs)
-        self.n_heldout_neurons = 0
-
-    def get_stimuli(self, stimuli_partition):
-        X = self.data['stimuli'][:]/255
-        # partition the stimuli
-        X_Partitioned = self.partition(X)[stimuli_partition]
-        return X_Partitioned
-
-    def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):
-        # note, trials and time window not currently function in this implementation
-        if self.hparams.window != '7t17':
-            raise NameError('7t17 is the only time window implemented on MajajHong2015')
-        if n_trials != 'All':
-            raise NameError('n_trials not implemented on MajajHong2015')
-        if self.verbose:
-            print(
-                f'constructing {stimuli_partition} data with\n' +
-                f'animals:{animals}\n' +
-                f'neurons:{n_neurons}\n' +
-                f'trials:{n_trials}\n'
-            )
-        # transform "All" to all dataset's animals
-        animals = self.expand(animals)
-        n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)
-        n_trials = int(1e10) if n_trials=='All' else int(n_trials)
-        X = np.concatenate([
-            self._get_neural_responses(animal, n_trials, neuron_partition, hparams)
-            for animal in animals
-        ], axis=1)
-
-        # only return [:n_neurons] if it's not the heldout set of neurons
-        if neuron_partition == 0:
-            # should be taking a random sample not just first n. can we reuse partition neurons?
-            X = X[:, :n_neurons]
-
-        if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
-        
-        X_Partitioned = self.partition(X)[stimuli_partition]
-        return X_Partitioned
-
-    def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
-        animal, region = animal.split('.')
-        X = self.data[animal][region]
-
-        if self.verbose:
-            print(
-                f'{animal} {region} shape:\n(time_bins, stimuli, sites) : {X.shape}'
-            )
-
-        # get mean of 70 through 170 time bins
-        X = np.nanmean(X[list(range(14,24,2))], axis=0)
-
-        if self.verbose:
-            print(
-                f'{animal} {region} shape:\n(stimuli, sites) : {X.shape}'
-            )
-        """
-        get subset of neurons to fit/test on. 
-        return_heldout==0 => fitting set,
-        return_heldout==1 => heldout set
-        """
-        if self.n_heldout_neurons != 0:
-            X = self.partition_neurons(
-                X, X.shape[1]-self.n_heldout_neurons, seed=hparams.seed
-            )[neuron_partition]
-
-        #if self.verbose:
-        #    print(f'(stimuli, sites, trials) : {X.shape}')
-
-        ## take mean over trials
-        #X = X[:,:,:n_trials]
-        #X = np.nanmean(X, axis=2)
-
-        if self.verbose:
-            print(f'(stimuli, sites) : {X.shape}')
-
-        assert ~np.isnan(np.sum(X))
-        return X
-    
-    @staticmethod
-    def expand(animals):
-        if animals[0] == 'All':
-            animals = ['chabo.left', 'tito.left']
-        return animals
-
 class _SachiMajajHongDataConstructer(NeuralDataConstructor):
 
     data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/SachiMajajHong2015.h5', 'r')
@@ -660,7 +575,7 @@ class _SachiMajajHongDataConstructer(NeuralDataConstructor):
 
     def get_labels(self, stimuli_partition, class_type):
         # get data
-        X = self.data['category_name'][()]
+        X = self.data['category_name'][()][self.idxs]
 
         # get labels and label map
         labels = np.unique(X)
@@ -809,8 +724,7 @@ class Partition:
 SOURCES = {
     'kktemporal' : KKTemporalDataConstructer,
     'manymonkeys' : ManyMonkeysDataConstructer,
-    'manymonkeys_val' : ManyMonkeysValDataConstructer,
-    'majajhong2015' : MajajHongDataConstructer,
+    'manymonkeysval' : ManyMonkeysValDataConstructer,
     'sachimajajhong' : SachiMajajHongDataConstructer,
     'sachimajajhongpublic' : SachiMajajHongPublicDataConstructer
 }

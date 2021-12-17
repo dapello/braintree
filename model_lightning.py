@@ -16,6 +16,7 @@ from pytorch_lightning.core import LightningModule
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 from braintree.benchmarks import score_model
 from braintree.adversary import Adversary
+from datamodules.neural_datamodule import NeuralDataModule2
 from models.helpers import layer_maps, add_normalization, add_outputs, Hook
 
 ##### models
@@ -115,7 +116,7 @@ class Model_Lightning(LightningModule):
         return loaders
 
     def val_dataloader(self):
-        # loaders = {key : self.dm[key].val_dataloader() for key in self.dm}
+        # we just run ImageNet val through the normal val_dataloader -- the neural validation is handled in validation_epoch_end
 
         loaders = [self.dm[key].val_dataloader() for key in self.dm if "ImageNet" in key]
 
@@ -291,6 +292,24 @@ class Model_Lightning(LightningModule):
                 benchmarks['uneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
                     stimuli_partition='test', neuron_partition=1, batch_size=batch_size
                 )
+
+        if 'magneto.var6' in self.hparams.benchmarks:
+            # load manymonkeys test set, animal magneto, var 6
+            benchmarks['magneto.var6'] = NeuralDataModule2(
+                self.hparams, neuraldataset='manymonkeysval', num_workers=1
+            ).val_dataloader(
+                stimuli_partition='test', neuron_partition=0, animals=['magneto.left', 'magneto.right'],
+                batch_size=batch_size, 
+            )
+
+        if 'nano.var6' in self.hparams.benchmarks:
+            # load manymonkeys test set, animal nano, var 6
+            benchmarks['nano.var6'] = NeuralDataModule2(
+                self.hparams, neuraldataset='manymonkeysval', num_workers=1
+            ).val_dataloader(
+                stimuli_partition='test', neuron_partition=0, animals=['nano.left', 'nano.right'], 
+                batch_size=batch_size,
+            )
 
         return benchmarks
 
