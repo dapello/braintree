@@ -127,6 +127,7 @@ class StimuliBaseModule(LightningDataModule):
             neuron_partition=0, 
             stimuli_partition='train',
             animals=hparams.fit_animals,
+            neurons=hparams.neurons,
             n_trials=hparams.trials
         )
 
@@ -144,12 +145,13 @@ class StimuliBaseModule(LightningDataModule):
             print(f'neural train set shape: {X.shape}, {[y.shape for y in Y]}')
         return loader
 
-    def val_dataloader(self, stimuli_partition='test', neuron_partition=0, animals=None, batch_size=None):
+    def val_dataloader(self, stimuli_partition='test', neuron_partition=0, neurons=None, animals=None, batch_size=None):
         """
         Uses the validation split of neural data
         """
         hparams = self.hparams
         animals = animals if animals is not None else hparams.test_animals
+        neurons = neurons if neurons is not None else hparams.neurons
         batch_size = batch_size if batch_size is not None else self.batch_size
 
         X = self.get_stimuli(stimuli_partition=stimuli_partition)
@@ -157,6 +159,7 @@ class StimuliBaseModule(LightningDataModule):
             neuron_partition=neuron_partition, 
             stimuli_partition=stimuli_partition,
             animals=animals,
+            neurons=neurons,
             n_trials='All'
         )
 
@@ -176,34 +179,7 @@ class StimuliBaseModule(LightningDataModule):
         return loader
 
 class NeuralDataModule(StimuliBaseModule):
-    name = 'NeuralData'
-    """
-    A DataLoader for neural data. Extends StimuliBaseModule and uses a dataconstructer class 
-    to format neural data.
-    """
-    def __init__(
-        self, 
-        hparams,
-        *args,
-        **kwargs
-    ):
-        super().__init__(hparams, *args, **kwargs)
-
-    def get_target(self, neuron_partition, stimuli_partition, animals, n_trials):
-        hparams = self.hparams
-
-        Y = self.constructor.get_neural_responses(
-            animals=animals, 
-            n_neurons=hparams.neurons,
-            n_trials=n_trials, 
-            neuron_partition=neuron_partition, 
-            stimuli_partition=stimuli_partition, 
-            hparams=hparams
-        ).astype('float32')[:self.n_stimuli]
-
-        return (Y,)
-
-class NeuralDataModule2(StimuliBaseModule):
+    ## add control for validation set neurons!
     name = 'NeuralData'
     """
     A DataLoader for neural data. Extends StimuliBaseModule and uses a dataconstructer class 
@@ -218,13 +194,13 @@ class NeuralDataModule2(StimuliBaseModule):
         super().__init__(hparams, *args, **kwargs)
         self.class_type = 'category_name'
 
-    def get_target(self, neuron_partition, stimuli_partition, animals, n_trials):
+    def get_target(self, neuron_partition, stimuli_partition, animals, neurons, n_trials):
         hparams = self.hparams
 
         # neural responses
         H = self.constructor.get_neural_responses(
             animals=animals, 
-            n_neurons=hparams.neurons,
+            n_neurons=neurons,
             n_trials=n_trials, 
             neuron_partition=neuron_partition, 
             stimuli_partition=stimuli_partition, 

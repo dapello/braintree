@@ -16,7 +16,7 @@ from pytorch_lightning.core import LightningModule
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 from braintree.benchmarks import score_model
 from braintree.adversary import Adversary
-from datamodules.neural_datamodule import NeuralDataModule2
+from datamodules.neural_datamodule import NeuralDataModule
 from models.helpers import layer_maps, add_normalization, add_outputs, Hook
 
 ##### models
@@ -295,20 +295,22 @@ class Model_Lightning(LightningModule):
 
         if 'magneto.var6' in self.hparams.benchmarks:
             # load manymonkeys test set, animal magneto, var 6
-            benchmarks['magneto.var6'] = NeuralDataModule2(
+            benchmarks['magneto.var6'] = NeuralDataModule(
                 self.hparams, neuraldataset='manymonkeysval', num_workers=1
             ).val_dataloader(
-                stimuli_partition='test', neuron_partition=0, animals=['magneto.left', 'magneto.right'],
-                batch_size=batch_size, 
+                stimuli_partition='test', neuron_partition=0, 
+                animals=['magneto.left', 'magneto.right'],
+                neurons='All', batch_size=batch_size, 
             )
 
         if 'nano.var6' in self.hparams.benchmarks:
             # load manymonkeys test set, animal nano, var 6
-            benchmarks['nano.var6'] = NeuralDataModule2(
+            benchmarks['nano.var6'] = NeuralDataModule(
                 self.hparams, neuraldataset='manymonkeysval', num_workers=1
             ).val_dataloader(
-                stimuli_partition='test', neuron_partition=0, animals=['nano.left', 'nano.right'], 
-                batch_size=batch_size,
+                stimuli_partition='test', neuron_partition=0, 
+                animals=['nano.left', 'nano.right'],
+                neurons='All', batch_size=batch_size,
             )
 
         return benchmarks
