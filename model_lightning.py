@@ -1,4 +1,4 @@
-import os, glob, time
+import os, glob, time, gc
 from collections import OrderedDict
 import argparse
 
@@ -213,15 +213,22 @@ class Model_Lightning(LightningModule):
 
                     # and classification of HVM stimuli, if fitting HVM labels
                     if self.hparams.loss_weights[2] > 0:
-                        self.classification(batch, 'val', output_inds=[1000,1008], dataset='Stimuli', adversarial=False)
+                        self.classification(
+                            batch, 'val', output_inds=[1000,1008], 
+                            dataset=f'Stimuli_{key}', adversarial=False
+                        )
 
                         # and also adversarial classification of HVM stimuli
                         if self.hparams.adv_eval_images:
-                            self.classification(batch, 'adv_val', output_inds=[1000,1008], dataset='Stimuli', adversarial=True)
+                            self.classification(
+                                batch, 'adv_val', output_inds=[1000,1008], 
+                                dataset=f'Stimuli_{key}', adversarial=True
+                            )
 
                     # we were having mem issues for a while, maybe they've been resolved?
                     del batch
                     ch.cuda.empty_cache()
+                    gc.collect()
 
         if self.hparams.BS_benchmarks[0] != 'None':
             self.model.eval()
@@ -251,6 +258,8 @@ class Model_Lightning(LightningModule):
                 if self.hparams.verbose: print(f'layers: {layers}, {benchmark_log}')
 
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+        gc.collect()
 
     def load_benchmarks(self):
         # benchmark loaders use very large batch_size
@@ -404,6 +413,12 @@ class Model_Lightning(LightningModule):
         }
 
         return [optimizer], [scheduler]
+
+    def on_train_epoch_end(self):
+        gc.collect()
+        pass
+
+
 
     @staticmethod
     def __accuracy(output, target, topk=(1,)):
