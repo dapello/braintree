@@ -369,7 +369,6 @@ class Model_Lightning(LightningModule):
             raise NameError(f'Unexpected batch length {len(batch)}!')
 
         if adversarial:
-            print('adversarial similarity')
             # adversarially attack on labels. requires HVM readouts to be trained.
             X = self.adversaries['neural_adversary'].generate(X, Y, F.cross_entropy, output_inds=[1000,1008])
 
@@ -395,9 +394,6 @@ class Model_Lightning(LightningModule):
     def configure_optimizers(self):
         param_list, lr = self.parameters(), self.hparams.lr
         
-        ## ???
-        #lr_list = lr
-        
         optimizer = optim.SGD(
             param_list, 
             lr = lr, 
@@ -415,10 +411,8 @@ class Model_Lightning(LightningModule):
         return [optimizer], [scheduler]
 
     def on_train_epoch_end(self):
+        # better memory management
         gc.collect()
-        pass
-
-
 
     @staticmethod
     def __accuracy(output, target, topk=(1,)):
