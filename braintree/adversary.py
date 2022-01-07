@@ -23,6 +23,7 @@ class Adversary:
         
     def generate(self, X, Y, loss_fnc, output_inds=[0,1000]):
         """generate stimuli maximizing loss function provided"""
+        training = self.model.training
         self.model.eval()
         X = X.cuda()
         Y = Y.cuda()
@@ -33,6 +34,9 @@ class Adversary:
                 X_adv.append(self.generate_(X_, Y_, loss_fnc, output_inds=output_inds))
             X_adv = ch.cat(X_adv)
             
+        if training:
+            self.model.train()
+
         return X_adv
 
     def generate_(self, X, Y, loss_fnc, output_inds=[0,1000]):

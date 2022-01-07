@@ -105,12 +105,16 @@ def get_args(*args):
                                help='prints more details of dataloading / etc')
     parent_parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                                help='evaluate model on validation set')
+    parent_parser.add_argument('-ati', '--adv_train_images', dest='adv_train_images', action='store_true',
+                               help='adversarially evaluate model on validation set')
     parent_parser.add_argument('-aei', '--adv_eval_images', dest='adv_eval_images', action='store_true',
                                help='adversarially evaluate model on validation set')
     parent_parser.add_argument('-aen', '--adv_eval_neural', dest='adv_eval_neural', action='store_true',
                                help='adversarially evaluate model on CenteredKernelAlignment')
+    parent_parser.add_argument('-teps', '--train_epsilon', dest='train_eps', type=float, default=1/1020,
+                               help='maximum L_inf perturbation strength (for training)')
     parent_parser.add_argument('-eps', '--epsilon', dest='eps', type=float, default=1/1020,
-                               help='maximum L_inf perturbation strength')
+                               help='maximum L_inf perturbation strength (for evaluating)')
 
     # data specific arguments. maybe move to DATAMODULES like MODELS?
     parent_parser.add_argument('-d', '--datamodule', dest='datamodule', nargs='+', 

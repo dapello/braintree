@@ -92,16 +92,23 @@ class Model_Lightning(LightningModule):
 
     def generate_adversaries(self):
         adversaries = {}
+        if self.hparams.adv_train_images:
+            ## make class adversary
+            adversaries['train_class_adversary'] = Adversary(
+                model=self.model,
+                eps=self.hparams.train_eps
+            )
+
         if self.hparams.adv_eval_images:
             ## make class adversary
-            adversaries['class_adversary'] = Adversary(
+            adversaries['adv_val_class_adversary'] = Adversary(
                 model=self.model,
                 eps=self.hparams.eps
             )
 
         if self.hparams.adv_eval_neural:
             ## make region adversaries
-            adversaries['neural_adversary'] = Adversary(
+            adversaries['adv_val_neural_adversary'] = Adversary(
                 model=self.model,
                 eps=self.hparams.eps
             )
@@ -164,7 +171,11 @@ class Model_Lightning(LightningModule):
                 if not self.hparams.adapt_bn_to_stim: self.model.eval()
                 losses.append(
                     self.loss_weights[dataloader_idx]*self.classification(
-                        batch_, 'train', output_inds=[1000, 1008], dataset='Stimuli'
+                        batch_, 
+                        'train', 
+                        output_inds=[1000, 1008], 
+                        dataset='Stimuli',
+                        adversarial=self.hparams.adv_train_images
                     )
                 )
                 if not self.hparams.adapt_bn_to_stim: self.model.train()
@@ -189,11 +200,7 @@ class Model_Lightning(LightningModule):
         return sum(losses)
 
     def validation_epoch_end(self, outputs):
-        # what if we do the real neural validation work here?
-        # validation options: 
-        # [fitted neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=0) 
-        # [heldout neurons, fitted stimuli] # dm.val_loader(stimuli_partion='train', neuron_partition=1) 
-        # [heldout neurons, heldout stimuli] # dm.val_loader(stimuli_partion='test', neuron_partition=1) 
+        # we do the real neural validation work here
         if 'NeuralData' in self.dm.keys():
             ch.cuda.empty_cache()
             with ch.no_grad():
@@ -327,20 +334,38 @@ class Model_Lightning(LightningModule):
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
 
+    def unpack_batch(self, batch, flag):
+        X, H, Y = None, None, None
+        if flag == 'classification':
+            if len(batch) == 3:
+                # batches from neural dataloader
+                X, H, Y = batch
+            elif len(batch) == 2:
+                # batches from imagenet dataloader
+                X, Y = batch
+            else:
+                raise NameError(f'Unexpected batch length {len(batch)}!')
+
+        elif flag == 'similarity':
+            if len(batch) == 3:
+                X, H, Y = batch
+            elif len(batch) == 2:
+                X, H = batch
+            else:
+                raise NameError(f'Unexpected batch length {len(batch)}!')
+        
+        if Y is not None:
+            Y = Y.long().cuda()
+
+        return X, H, Y
+
     def classification(self, batch, mode, output_inds=[0,1000], dataset='ImageNet', adversarial=False):
-        if len(batch) == 3:
-            # batches from neural dataloader
-            X, H, Y = batch
-        elif len(batch) == 2:
-            # batches from imagenet dataloader
-            X, Y = batch
-        else:
-            raise NameError(f'Unexpected batch length {len(batch)}!')
-
-        Y = Y.long().cuda()
-
+        X, H, Y = self.unpack_batch(batch, flag='classification')
+        
         if adversarial:
-            X = self.adversaries['class_adversary'].generate(X, Y, F.cross_entropy, output_inds=output_inds)
+            X = self.adversaries[f'{mode}_class_adversary'].generate(
+                X, Y, F.cross_entropy, output_inds=output_inds
+            )
 
         Y_hat = self.model(X)[:, output_inds[0]:output_inds[1]]
 
@@ -360,17 +385,13 @@ class Model_Lightning(LightningModule):
         return loss
 
     def similarity(self, batch, region, mode, adversarial=False):
-        if len(batch) == 3:
-            X, H, Y = batch
-            Y = Y.long()
-        elif len(batch) == 2:
-            X, H = batch
-        else:
-            raise NameError(f'Unexpected batch length {len(batch)}!')
+        X, H, Y = self.unpack_batch(batch, flag='similarity')
 
         if adversarial:
             # adversarially attack on labels. requires HVM readouts to be trained.
-            X = self.adversaries['neural_adversary'].generate(X, Y, F.cross_entropy, output_inds=[1000,1008])
+            X = self.adversaries[f'{mode}_neural_adversary'].generate(
+                X, Y, F.cross_entropy, output_inds=[1000,1008]
+            )
 
         _ = self.model(X)
         H_hat = self.regions[region].output
