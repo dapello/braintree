@@ -162,6 +162,14 @@ def get_args(*args):
                                help='data augmentation hue jitter')
     parent_parser.add_argument('--window', default='7t17',
                                help='time window to average neural data over. 7t17 => 70ms through 170ms')
+    # control conditions
+    parent_parser.add_argument('--controls', dest='controls',  nargs='*', default=['None'],
+                               choices=['None', 'shuffle', 'random', 'rank', 'spectrum'],
+                               help='control conditions on neural representations. Only applied on trainset. See neural dataloader.')
+    parent_parser.add_argument('--rank', dest='rank', type=int, default=10,
+                               help='rank of representation approximation. Only applied if rank option used in controls')
+    parent_parser.add_argument('--exponent', dest='exponent', type=float, default=-1.0,
+                               help='rank of representation approximation. Only applied if rank option used in controls')
 
     parser = MODEL.add_model_specific_args(parent_parser)
     args, unknown = parser.parse_known_args(*args) 

@@ -207,12 +207,38 @@ class NeuralDataModule(StimuliBaseModule):
             hparams=hparams
         ).astype('float32')[:self.n_stimuli]
 
+        if stimuli_partition == 'train':
+            H = self.control_manipulate(H)
+
         Y = self.constructor.get_labels(
             stimuli_partition=stimuli_partition,
             class_type=self.class_type
         )[:self.n_stimuli]
 
         return (H, Y)
+
+    def control_manipulate(self, H):
+        def shuffle(X):
+            ntotal = X.shape[0]
+            shuffled_inds = np.random.choice(ntotal, ntotal, replace=False)
+            return X[shuffled_inds]
+
+        def randn_like(X):
+            return np.random.randn(*X.shape)
+
+        if 'shuffle' in self.hparams.controls:
+            H = shuffle(H)
+
+        if 'random' in self.hparams.controls:
+            H = randn_like(H)
+
+        if 'rank' in self.hparams.controls:
+            raise NameError('Rank control not implemented!')
+
+        if 'spectrum' in self.hparams.controls:
+            raise NameError('spectrum control not implemented!')
+
+        return H
 
 class StimuliDataModule(StimuliBaseModule):
     name = 'StimuliClassification'
