@@ -122,7 +122,7 @@ def get_args(*args):
                                help='which datamodule to use.')
     parent_parser.add_argument('-nd', '--neuraldataset', dest='neuraldataset', default='manymonkeys',
                                choices=SOURCES.keys(), help='which source neural dataset to construct from')
-    parent_parser.add_argument('--benchmarks', dest='benchmarks',  nargs='*', default=['fneurons.ustimuli', 'magneto.var6', 'nano.var6'],
+    parent_parser.add_argument('--benchmarks', dest='benchmarks',  nargs='*', default=['fneurons.ustimuli', 'magneto.var6', 'nano.var6', 'nano.left.var6', 'nano.coco'],
                                choices=['None', 'All'] + MODEL.BENCHMARKS,
                                help='which metrics to collect at the end of the epoch')
     parent_parser.add_argument('-BS', '--BS_benchmarks', dest='BS_benchmarks',  nargs='*', default=['None'],

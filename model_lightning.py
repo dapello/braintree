@@ -312,6 +312,16 @@ class Model_Lightning(LightningModule):
                     stimuli_partition='test', neuron_partition=1, batch_size=batch_size
                 )
 
+        if 'nano.coco' in self.hparams.benchmarks:
+            # load manymonkeys test set, animal nano, var 6
+            benchmarks['nano.coco'] = NeuralDataModule(
+                self.hparams, neuraldataset='COCO', num_workers=1
+            ).val_dataloader(
+                stimuli_partition='test', neuron_partition=0, 
+                animals=['nano.left'],
+                neurons='All', batch_size=batch_size,
+            )
+
         if 'magneto.var6' in self.hparams.benchmarks:
             # load manymonkeys test set, animal magneto, var 6
             benchmarks['magneto.var6'] = NeuralDataModule(
@@ -329,6 +339,16 @@ class Model_Lightning(LightningModule):
             ).val_dataloader(
                 stimuli_partition='test', neuron_partition=0, 
                 animals=['nano.left', 'nano.right'],
+                neurons='All', batch_size=batch_size,
+            )
+
+        if 'nano.left.var6' in self.hparams.benchmarks:
+            # load manymonkeys test set, animal nano, var 6
+            benchmarks['nano.left.var6'] = NeuralDataModule(
+                self.hparams, neuraldataset='manymonkeysval', num_workers=1
+            ).val_dataloader(
+                stimuli_partition='test', neuron_partition=0, 
+                animals=['nano.left'],
                 neurons='All', batch_size=batch_size,
             )
 

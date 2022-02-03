@@ -517,6 +517,7 @@ class _ManyMonkeysDataConstructer(NeuralDataConstructor):
             ]
         return animals
 
+
 class _SachiMajajHongDataConstructer(NeuralDataConstructor):
 
     data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/SachiMajajHong2015.h5', 'r')
@@ -646,6 +647,98 @@ def SachiMajajHongDataConstructer(hparams):
 def SachiMajajHongPublicDataConstructer(hparams):
     return _SachiMajajHongDataConstructer(hparams, auth='public', partition_scheme=(3200, 2880, 320, 0))
 
+class COCODataConstructer(NeuralDataConstructor):
+
+    data = h5.File(f'{NEURAL_DATA_PATH}/neural_data/bento_nano_COCO.h5', 'r')
+
+    def __init__(
+        self, hparams, variations='All', partition_scheme=(200, 0, 200, 0), *args, **kwargs
+    ):
+        super().__init__(hparams, partition_scheme, *args, **kwargs)
+        self.n_heldout_neurons = 0
+
+    def get_stimuli(self, stimuli_partition):
+        X = self.data['stimuli'][()].transpose(0,3,1,2)
+        # partition the stimuli
+        X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def get_labels(self, stimuli_partition, class_type):
+        # just make up labels
+        X = self.data['stimuli'][()]
+        X = np.arange(len(X))
+        X_Partitioned = self.partition(X)[stimuli_partition]
+
+        return X_Partitioned
+
+    def get_neural_responses(self, animals, n_neurons, n_trials, neuron_partition, stimuli_partition, hparams):
+        if self.verbose:
+            print(
+                f'constructing {stimuli_partition} data with\n' +
+                f'animals:{animals}\n' +
+                f'neurons:{n_neurons}\n' +
+                f'trials:{n_trials}\n'
+            )
+        # transform "All" to all dataset's animals
+        animals = self.expand(animals)
+        n_neurons = int(1e10) if n_neurons=='All' else int(n_neurons)
+        n_trials = int(1e10) if n_trials=='All' else int(n_trials)
+        X = np.concatenate([
+            self._get_neural_responses(animal, n_trials, neuron_partition, hparams)
+            for animal in animals
+        ], axis=1)
+
+        # only return [:n_neurons] if it's not the heldout set of neurons
+        if neuron_partition == 0:
+            # should be taking a random sample not just first n. can we reuse partition neurons?
+            X = X[:, :n_neurons]
+
+        if self.verbose: print(f'Neural data shape:\n(stimuli, sites) : {X.shape}')
+        
+        X_Partitioned = self.partition(X)[stimuli_partition]
+        return X_Partitioned
+
+    def _get_neural_responses(self, animal, n_trials, neuron_partition, hparams):
+        animal, region = animal.split('.')
+        X = self.data[animal][region]['coco']['rates'][()]
+
+        if self.verbose:
+            print(
+                f'{animal} {region} shape:\n(stimuli, sites, trials) : {X.shape}'
+            )
+
+        """
+        get subset of neurons to fit/test on. 
+        return_heldout==0 => fitting set,
+        return_heldout==1 => heldout set
+        """
+        if self.n_heldout_neurons != 0:
+            X = self.partition_neurons(
+                X, X.shape[1]-self.n_heldout_neurons, seed=hparams.seed
+            )[neuron_partition]
+
+        if self.verbose:
+            print(f'(stimuli, sites, trials) : {X.shape}')
+
+        # take mean over trials
+        X = X[:,:,:n_trials]
+        X = np.nanmean(X, axis=2)
+
+        if self.verbose:
+            print(f'(stimuli, sites) : {X.shape}')
+
+        assert ~np.isnan(np.sum(X))
+        return X
+    
+    @staticmethod
+    def expand(animals):
+        if animals[0] == 'All':
+            animals = [
+                'nano.left', 
+                'bento.left', 
+            ]
+        return animals
+
 class Partition:
     """ 
     generate random indices dividing data into train, test, and val sets.
@@ -702,7 +795,8 @@ SOURCES = {
     'manymonkeys' : ManyMonkeysDataConstructer,
     'manymonkeysval' : ManyMonkeysValDataConstructer,
     'sachimajajhong' : SachiMajajHongDataConstructer,
-    'sachimajajhongpublic' : SachiMajajHongPublicDataConstructer
+    'sachimajajhongpublic' : SachiMajajHongPublicDataConstructer,
+    'COCO' : COCODataConstructer
 }
 
 """
