@@ -313,12 +313,22 @@ class Model_Lightning(LightningModule):
                 )
 
         if 'nano.coco' in self.hparams.benchmarks:
-            # load manymonkeys test set, animal nano, var 6
+            # load manymonkeys test set, animal nano, with COCO stimuli
             benchmarks['nano.coco'] = NeuralDataModule(
                 self.hparams, neuraldataset='COCO', num_workers=1
             ).val_dataloader(
                 stimuli_partition='test', neuron_partition=0, 
                 animals=['nano.left'],
+                neurons='All', batch_size=batch_size,
+            )
+
+        if 'bento.coco' in self.hparams.benchmarks:
+            # load manymonkeys test set, animal nano, with COCO stimuli
+            benchmarks['bento.coco'] = NeuralDataModule(
+                self.hparams, neuraldataset='COCO', num_workers=1
+            ).val_dataloader(
+                stimuli_partition='test', neuron_partition=0, 
+                animals=['bento.left'],
                 neurons='All', batch_size=batch_size,
             )
 
