@@ -1,5 +1,6 @@
 import torch as ch
 import torch.nn as nn
+from copy import deepcopy
 
 layer_maps = {
     'efficientnet_b0' : {
@@ -67,6 +68,23 @@ class Normalize(nn.Module):
         x = x - self.mean.type_as(x)
         x = x / self.std.type_as(x)
         return x
+
+def copy_bns(model):
+    bns = {}
+    for name, module in model.named_modules():
+        if '.norm' in name:
+            bns[name] = deepcopy(module)
+            
+    return bns
+
+def paste_bns(model, bns):
+    for name, module in bns.items():
+        name = name[1:]
+        exec(f'model[1]{name} = module')
+        # not sure why this way doesn't work?
+        # setattr(model, name, module)
+        
+    return model
 
 def add_normalization(model, **kwargs):
     return nn.Sequential(Normalize(**kwargs), model)

@@ -18,7 +18,7 @@ from braintree.losses import CenteredKernelAlignment2, LogCenteredKernelAlignmen
 from braintree.benchmarks import score_model
 from braintree.adversary import Adversary
 from datamodules.neural_datamodule import NeuralDataModule
-from models.helpers import layer_maps, add_normalization, add_outputs, Hook
+from models.helpers import layer_maps, add_normalization, add_outputs, Hook, copy_bns, paste_bns
 
 ##### models
 import torchvision.models as torchvision_models
@@ -66,9 +66,21 @@ class Model_Lightning(LightningModule):
         self.benchmarks = self.load_benchmarks()
         self.adversaries = self.generate_adversaries()
 
+        # initialize bn modes
+        self.bn_imnet = copy_bns(self.model)
+        self.bn_hvm = copy_bns(self.model)
+        self.model = paste_bns(self.model, self.bn_imnet)
+
         print('record_time = ', self.record_time)
         self.save_hyperparameters()
-        
+    
+    def set_bn(self, mode):
+        if 'ImageNet' in mode:
+            self.model = paste_bns(self.model, self.bn_imnet)
+
+        if 'Stimuli' in mode:
+            self.model = paste_bns(self.model, self.bn_hvm)
+
     def forward(self, x):
         return self.model(x)
 
@@ -208,6 +220,7 @@ class Model_Lightning(LightningModule):
             ch.cuda.empty_cache()
             with ch.no_grad():
                 self.model.eval()
+                self.set_bn(mode='Stimuli')
                 # loop over benchmarks (here, dataloaders)
                 for key in self.benchmarks:
                     # draw the data from the data loader (large batch_size => 1 batch for validation)
@@ -241,6 +254,8 @@ class Model_Lightning(LightningModule):
                     gc.collect()
 
         if self.hparams.BS_benchmarks[0] != 'None':
+            ## set bn for each?
+            self.set_bn(mode='ImageNet')
             self.model.eval()
             benchmark_log = {}
             for benchmark_identifier in self.hparams.BS_benchmarks:
@@ -393,6 +408,7 @@ class Model_Lightning(LightningModule):
         return X, H, Y
 
     def classification(self, batch, mode, output_inds=[0,1000], dataset='ImageNet', adversarial=False):
+        self.set_bn(mode=dataset)
         X, H, Y = self.unpack_batch(batch, flag='classification')
         
         if adversarial:
@@ -418,6 +434,7 @@ class Model_Lightning(LightningModule):
         return loss
 
     def similarity(self, batch, region, mode, adversarial=False):
+        self.set_bn(mode='Stimuli')
         X, H, Y = self.unpack_batch(batch, flag='similarity')
 
         if adversarial:
@@ -444,6 +461,8 @@ class Model_Lightning(LightningModule):
         #print(f'>>>sim: total {t}, reserved {r}, allocated {a}, free {f}')
 
         return loss
+
+
 
     def configure_optimizers(self):
         param_list, lr = self.parameters(), self.hparams.lr
