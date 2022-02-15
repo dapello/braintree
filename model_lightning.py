@@ -67,32 +67,30 @@ class Model_Lightning(LightningModule):
         self.adversaries = self.generate_adversaries()
 
         # initialize bn modes
-        self.bn_imnet = copy_bns(self.model)
-        self.bn_hvm = copy_bns(self.model)
-        self.set_bn('ImageNet')
+        if hparams.multi_bn:
+            self.bn_imnet = copy_bns(self.model)
+            self.bn_hvm = copy_bns(self.model)
+            self.set_bn('ImageNet')
 
         print('record_time = ', self.record_time)
         self.save_hyperparameters()
     
     def set_bn(self, mode):
-        if 'ImageNet' in mode:
-            bns = self.bn_imnet
-            print('swapped to ImageNet bn')
+        if self.hparams.multi_bn:
+            if 'ImageNet' in mode:
+                bns = self.bn_imnet
+                print('swapped to ImageNet bn')
 
-        if 'Stimuli' in mode:
-            bns = self.bn_hvm
-            print('swapped to Stimuli bn')
+            if 'Stimuli' in mode:
+                bns = self.bn_hvm
+                print('swapped to Stimuli bn')
 
-        if self.model.training:
-            for name, module in bns.items(): module.train()
-        else:
-            for name, module in bns.items(): module.eval()
-        
-        self.model = paste_bns(self.model, bns)
-
-        print('sample running means')
-        print(self.model[1].module.V1.norm1.running_mean[:5])
-        print('\n')
+            if self.model.training:
+                for name, module in bns.items(): module.train()
+            else:
+                for name, module in bns.items(): module.eval()
+            
+            self.model = paste_bns(self.model, bns)
 
     def forward(self, x):
         return self.model(x)
@@ -552,6 +550,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--optim', dest='optim', default='sgd') # := {'sgd'}
         parser.add_argument('--pretrained', dest='pretrained', type=int, default=1)
         parser.add_argument('-adapt', '--adapt_bn_to_stim', dest='adapt_bn_to_stim', type=int, default=1)
+        parser.add_argument('-multi_bn', '--multi_bn', dest='multi_bn', type=int, default=0)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser
