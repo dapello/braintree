@@ -9,7 +9,7 @@ from model_lightning import Model_Lightning as MODEL
 
 from datamodules import DATAMODULES
 from datamodules.neural_datamodule import SOURCES
-from braintree.benchmarks import list_brainscore_benchmarks
+from braintree.benchmarks import list_brainscore_benchmarks, list_behavior_benchmarks
 
 default_save_path = "dev" 
 
@@ -128,6 +128,10 @@ def get_args(*args):
     parent_parser.add_argument('-BS', '--BS_benchmarks', dest='BS_benchmarks',  nargs='*', default=['None'],
                                choices=['None'] + list_brainscore_benchmarks(),
                                help='which metrics to collect at the end of the epoch')
+    parent_parser.add_argument('-BH', '--behanvior_benchmarks', dest='behavior_benchmarks',  nargs='*', 
+                               default=list_behavior_benchmarks(),
+                               choices=['None'] + list_behavior_benchmarks(),
+                               help='which behavior metrics to collect at the end of the epoch')
     parent_parser.add_argument('--fit_animals', dest='fit_animals',  nargs='*', default=['All'],
                                help='which animals to fit from the dataset, should be of form "nano.right"')
     parent_parser.add_argument('--test_animals', dest='test_animals',  nargs='*', default=['All'],

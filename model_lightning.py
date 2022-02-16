@@ -15,7 +15,7 @@ from pytorch_lightning.core import LightningModule
 
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
 from braintree.losses import CenteredKernelAlignment2, LogCenteredKernelAlignment2
-from braintree.benchmarks import score_model
+from braintree.benchmarks import score_model, score_model_behavior
 from braintree.adversary import Adversary
 from datamodules.neural_datamodule import NeuralDataModule
 from models.helpers import layer_maps, add_normalization, add_outputs, Hook, copy_bns, paste_bns
@@ -271,7 +271,6 @@ class Model_Lightning(LightningModule):
             benchmark_log = {}
             for benchmark_identifier in self.hparams.BS_benchmarks:
                 model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-{int(time.time())}'
-                print('>>>', model_id)
                 layer = '1.module.' if hasattr(self.model[1], 'module') else '1.'
                 if 'V1' in benchmark_identifier:
                     layers = [layer + self.layer_map['V1']]
@@ -283,6 +282,7 @@ class Model_Lightning(LightningModule):
                     layers = [layer + self.layer_map['IT']]
                 else:
                     layers = [layer + self.layer_map['decoder']]
+
                 score = score_model(
                     model_identifier=model_id,
                     model=self.model,
@@ -294,6 +294,44 @@ class Model_Lightning(LightningModule):
                 if self.hparams.verbose: print(f'layers: {layers}, {benchmark_log}')
 
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+        if self.hparams.behavior_benchmarks[0] != 'None':
+            self.set_bn(mode='ImageNet')
+            self.model.eval()
+            benchmark_log = {}
+            for benchmark_identifier in self.hparams.behavior_benchmarks:
+                print(benchmark_identifier)
+                model_id = f'{self.hparams.file_name}-v_{self.hparams.v_num}-{int(time.time())}'
+                layer = '1.module.' if hasattr(self.model[1], 'module') else '1.'
+                
+                ## score behavior from decoder
+                layer_ = layer + self.layer_map['decoder']
+                
+                score = score_model_behavior(
+                    model_id=model_id,
+                    model=self.model,
+                    layer=layer_,
+                    benchmark=benchmark_identifier,
+                )
+
+                benchmark_log[benchmark_identifier+'_decoder'] = score
+                if self.hparams.verbose: print(f'layer: {layer}, {benchmark_log}')
+                
+                ## and also from IT fit layer..
+                #layer_ = layer + self.layer_map['IT']
+                #
+                #score = score_model_behavior(
+                #    model_id=model_id,
+                #    model=self.model,
+                #    layer=layer_,
+                #    benchmark=benchmark_identifier,
+                #)
+
+                #benchmark_log[benchmark_identifier+'_IT'] = score
+                #if self.hparams.verbose: print(f'layer: {layer}, {benchmark_log}')
+
+            self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
 
         gc.collect()
 
