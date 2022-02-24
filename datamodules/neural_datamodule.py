@@ -446,7 +446,7 @@ class _ManyMonkeysDataConstructer(NeuralDataConstructor):
         super().__init__(hparams, partition_scheme, *args, **kwargs)
         if variations == 'All':
             # return all stimuli
-            self.idxs = np.array(range(len(data['var'][()])))
+            self.idxs = np.array(range(len(self.data['var'][()])))
             assert partition_scheme[0] == 640
         if variations == 3:
             self.idxs = self.data['var'][()] == 3
