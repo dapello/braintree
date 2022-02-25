@@ -40,16 +40,16 @@ class StimuliBaseModule(LightningDataModule):
 
         # data augmentation parameters
         self.neural_train_transform = hparams.neural_train_transform
-        self.gn_std = hparams.gaussian_noise
-        self.gb_kernel_size, self.gb_min_max_std = eval(hparams.gaussian_blur)
+        #self.gn_std = hparams.gaussian_noise
+        #self.gb_kernel_size, self.gb_min_max_std = eval(hparams.gaussian_blur)
         self.translate = eval(hparams.translate)
         self.rotate = eval(hparams.rotate)
         self.scale = eval(hparams.scale)
         self.shear = eval(hparams.shear)
-        self.brightness = eval(hparams.brightness)
-        self.contrast = eval(hparams.contrast)
-        self.saturation = eval(hparams.saturation)
-        self.hue = eval(hparams.hue)
+        #self.brightness = eval(hparams.brightness)
+        #self.contrast = eval(hparams.contrast)
+        #self.saturation = eval(hparams.saturation)
+        #self.hue = eval(hparams.hue)
 
     def _get_DataLoader(self, *args, **kwargs):
         return DataLoader(*args, **kwargs)
@@ -67,15 +67,15 @@ class StimuliBaseModule(LightningDataModule):
                     shear=self.shear,
                     fillcolor=127
                 ),
-                transform_lib.ColorJitter(
-                    brightness=self.brightness,
-                    contrast=self.contrast,
-                    saturation=self.saturation,
-                    hue=self.hue
-                ),
+                #transform_lib.ColorJitter(
+                #    brightness=self.brightness,
+                #    contrast=self.contrast,
+                #    saturation=self.saturation,
+                #    hue=self.hue
+                #),
                 transform_lib.ToTensor(),
-                transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
-                transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
+                #transform_lib.Lambda(lambda x : x + ch.randn_like(x)*self.gn_std),
+                #transform_lib.GaussianBlur(self.gb_kernel_size, sigma=self.gb_min_max_std),
                 #imagenet_normalization(),
             ]
         else:
