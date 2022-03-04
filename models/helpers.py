@@ -69,6 +69,20 @@ class Normalize(nn.Module):
         x = x / self.std.type_as(x)
         return x
 
+class Mask(nn.Module):
+    """
+    Mask the outputs of a network to only spit out a specific section of labels.
+    """
+    def __init__(self, model, start, stop):
+        super(Mask, self).__init__()
+        self.model = model
+        self.start = start
+        self.stop = stop
+
+    def forward(self, x):
+        x = self.model(x)
+        return x[:, self.start:self.stop]
+
 def copy_bns(model):
     bns = {}
     for name, module in model.named_modules():
