@@ -194,11 +194,9 @@ def get_filename(hparams):
         + f'-loss_{hparams.neural_loss}'\
         + f'-ds_{hparams.neuraldataset}'\
         + f'-fanimals_{"+".join(hparams.fit_animals)}'\
-        + f'-tanimals_{"+".join(hparams.test_animals)}'\
-        + f'-regions_{"+".join(hparams.regions)}'\
-        + f'-trials_{hparams.trials}'\
         + f'-neurons_{hparams.neurons}'\
-        + f'-stimuli_{hparams.stimuli}'
+        + f'-stimuli_{hparams.stimuli}'\
+        + f'-seed_{hparams.seed}'
 
     return filename
 
