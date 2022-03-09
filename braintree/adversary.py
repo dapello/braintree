@@ -21,7 +21,7 @@ class Adversary:
         self.clamp = clamp
         self.batch_size = batch_size
         
-    def generate(self, X, Y, loss_fnc, output_inds=[0,1000]):
+    def generate(self, X, Y, loss_fnc, output_inds=[0,1000], rand_start=True):
         """generate stimuli maximizing loss function provided"""
         training = self.model.training
         self.model.eval()
@@ -31,7 +31,11 @@ class Adversary:
         with ch.set_grad_enabled(True):
             X_adv = []
             for X_, Y_ in zip(X.split(self.batch_size), Y.split(self.batch_size)):
-                X_adv.append(self.generate_(X_, Y_, loss_fnc, output_inds=output_inds))
+                X_adv.append(
+                    self._generate(
+                        X_, Y_, loss_fnc, output_inds=output_inds, rand_start=rand_start
+                    )
+                )
             X_adv = ch.cat(X_adv)
             
         if training:
@@ -39,12 +43,15 @@ class Adversary:
 
         return X_adv
 
-    def generate_(self, X, Y, loss_fnc, output_inds=[0,1000]):
+    def _generate(self, X, Y, loss_fnc, output_inds=[0,1000], rand_start=True):
         """generate stimuli maximizing loss function provided"""
         self.model.eval()
          
         with ch.set_grad_enabled(True):
             X_adv = X.clone().detach().requires_grad_(True).to(X.device)
+
+            if rand_start:
+                X_adv = X_adv + ch.sign(ch.randn_like(X_adv))*self.eps
             
             for i in range(self.num_steps):
                 _X_adv = X_adv.clone().detach().requires_grad_(True).to(X.device)

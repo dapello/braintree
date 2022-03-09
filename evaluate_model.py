@@ -13,7 +13,7 @@ from datamodules.neural_datamodule import NeuralDataModule
 from models.helpers import layer_maps, add_normalization, add_outputs, Mask
 
 def main(args):
-    weight_paths = [y for x in os.walk(f'.logs/{args.logdir}') for y in glob.glob(os.path.join(x[0], 'epoch*.ckpt'))]
+    weight_paths = [y for x in os.walk(f'logs/{args.logdir}') for y in glob.glob(os.path.join(x[0], 'epoch*.ckpt'))]
     for weight_path in weight_paths:
         do_the_thing(weight_path, args)
 
@@ -86,9 +86,15 @@ def load_dataset(args):
 def load_adversary(args, model):
     if args.attack == 'PGD':
         from art.attacks.evasion import ProjectedGradientDescent
+
+        if args.norm == 'inf':
+            norm = args.norm
+        else:
+            norm = eval(args.norm)
+
         attack = ProjectedGradientDescent(
             estimator=model, 
-            norm=args.norm,
+            norm=norm,
             max_iter=args.max_iter, 
             eps=args.eps, 
             eps_step=(args.eps / args.stepf),
