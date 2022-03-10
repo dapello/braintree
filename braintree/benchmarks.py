@@ -128,6 +128,7 @@ class BehaviorScorer:
         return target
                 
     def get_features(self, model_identifier, model, layer, image_size):
+        # extracts features from model at the target layer
         wrapped_model = wrap_model(
             identifier=model_identifier,
             model=model, 
@@ -146,27 +147,61 @@ class BehaviorScorer:
     
     def score_model(self, metric, model_id, model, layer, image_size=224):
         features = self.get_features(model_id, model, layer, image_size)
-        
-        if metric == 'i1':
-            prediction = self.compute_i1(features)
-            
-        if metric == 'i1n':
-            prediction = self.compute_i1(features)
-            prediction = self.compute_i1n(prediction)
-        
         target = self.get_target(metric)
         
-        pearsons_r = np.corrcoef(target, prediction)[0,1]
+        if 'i1' in metric:
+            prediction = self.compute_i1(features)
+            assert prediction.shape == target.shape
+            
+            if metric == 'i1n':
+                prediction = self.compute_i1n(prediction)
+
+            pearsons_r = np.corrcoef(target, prediction)[0,1]
         
-        return pearsons_r
+            return pearsons_r
         
+        elif 'i2' in metric:
+            # prediction is a matrix
+            prediction = self.compute_i2(features)
+            assert prediction.shape == target.shape
+
+            if metric == 'i2':
+                # flatten and remove nans (nans are on the block diagonal of the i2 matrix)
+                prediction = prediction.reshape(-1)
+                prediction = prediction[~np.isnan(prediction)]
+
+                target = target.reshape(-1)
+                target = target[~np.isnan(target)]
+                
+                pearsons_r = np.corrcoef(target, prediction)[0,1]
+
+                return pearsons_r
+
+            elif metric == 'i2n':
+                labels, lb = self.get_labels()
+                n_labels = len(np.unique(labels))
+
+                r_s = np.zeros(n_labels)
+                r_s[:] = np.nan
+
+                predictions = np.split(predictions, n_labels)
+                targets = np.split(target, n_labels)
+
+                for i, (target_, prediction_) in enumerate(zip(targets, predictions)):
+                    pearsons_r = np.corrcoef(target_, prediction_)[0,1]
+                    r_s[i] = pearsons_r
+                
+                mean_pearsons_r = np.mean(r_s)
+                return mean_pearsons_r
+
     def compute_i1(self, features):
         features = features.T
         nrImages = features.shape[1] # number of images retrieved from the feature matrix
+
+        labels, lb = self.get_labels()
+
         i_1 = np.zeros((nrImages,1,self.seeds), dtype=float)
         i_1[:]=np.NAN
-        
-        labels, lb = self.get_labels()
 
         for j in range(self.seeds):
             p = decode(features, labels, seed=j, nrfolds=3)
@@ -178,6 +213,26 @@ class BehaviorScorer:
         i1_mean = np.mean(i_1,axis=2).squeeze()
         
         return i1_mean
+
+    def compute_i2(self, features):
+        features = features.T
+        nrImages = features.shape[1] # number of images retrieved from the feature matrix
+
+        labels, lb = self.get_labels()
+        n_labels = len(np.unique(labels))
+
+        i_2 = np.zeros((nrImages, n_labels, self.seeds), dtype=float)
+        i_2[:]=np.NAN
+        
+
+        for j in range(self.seeds):
+            p = decode(features, labels, seed=j, nrfolds=3)
+            pc = get_percent_correct_from_proba(p, labels, np.array(lb))
+            i_2[:,:,j] = pc
+            
+        i2_mean = np.mean(i_2,axis=2)
+        
+        return i2_mean
     
     def compute_i1n(self, i1):
         object_means = i1.reshape(8,-1).mean(axis=1)
