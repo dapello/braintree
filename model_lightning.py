@@ -14,7 +14,6 @@ import pytorch_lightning as pl
 from pytorch_lightning.core import LightningModule
 
 from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
-from braintree.losses import CenteredKernelAlignment2, LogCenteredKernelAlignment2
 from braintree.benchmarks import score_model, score_model_behavior
 from braintree.adversary import Adversary
 from datamodules.neural_datamodule import NeuralDataModule
@@ -39,8 +38,6 @@ class Model_Lightning(LightningModule):
     NEURAL_LOSSES = {
         'CKA' : CenteredKernelAlignment,
         'logCKA' : LogCenteredKernelAlignment,
-        'CKA2' : CenteredKernelAlignment2,
-        'logCKA2' : LogCenteredKernelAlignment2
     }
 
     # f = fitted, u = unfitted. ie fnuerons.ustimuli => run benchmark on fitted neurons and unfitted stimuli

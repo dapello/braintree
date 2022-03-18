@@ -691,8 +691,7 @@ class COCODataConstructer(NeuralDataConstructor):
 
     def get_labels(self, stimuli_partition, class_type):
         # just make up labels
-        X = self.data['stimuli'][()]
-        X = np.zeros(len(X))
+        X = self.data['category_name_HVM_aligned'][()]
         X_Partitioned = self.partition(X)[stimuli_partition]
 
         return X_Partitioned
