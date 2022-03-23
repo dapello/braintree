@@ -168,6 +168,7 @@ class Model_Lightning(LightningModule):
    #     return loaders
 
     def training_step(self, batch, batch_idx):
+        #### refactor -- take a batch, run stimuli, and apply whatever losses to all outcomes at once.
         losses = []
         #import pdb; pdb.set_trace()
 
@@ -178,6 +179,10 @@ class Model_Lightning(LightningModule):
                         batch_, 'train'
                     )
                 )
+            
+                # for less than even mix of neural data
+                if ch.rand(1) > self.hparams.mix_rate:
+                    return sum(losses)
 
             # this assumes dataloader_idx is the dataloader for IT. 
             # fine for now, but need to generalize if we wanted to fit multiple layers.
@@ -232,6 +237,11 @@ class Model_Lightning(LightningModule):
                 # loop over benchmarks (here, dataloaders)
                 for key in self.benchmarks:
                     # draw the data from the data loader (large batch_size => 1 batch for validation)
+                    if 'coco' in key:
+                        self.set_bn(mode='ImageNet')
+                    else:
+                        self.set_bn(mode='Stimuli')
+
                     for batch in self.benchmarks[key]:
                         pass
 
@@ -280,6 +290,12 @@ class Model_Lightning(LightningModule):
                 else:
                     layers = [layer + self.layer_map['decoder']]
 
+
+                if 'Rajalingham' in benchmark_identifier:
+                    self.set_bn(mode='Stimuli')
+                else:
+                    self.set_bn(mode='ImageNet')
+
                 score = score_model(
                     model_identifier=model_id,
                     model=self.model,
@@ -293,7 +309,7 @@ class Model_Lightning(LightningModule):
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
         if self.hparams.behavior_benchmarks[0] != 'None':
-            self.set_bn(mode='ImageNet')
+            self.set_bn(mode='Stimuli')
             self.model.eval()
             benchmark_log = {}
             for benchmark_identifier in self.hparams.behavior_benchmarks:
@@ -400,6 +416,16 @@ class Model_Lightning(LightningModule):
             ).val_dataloader(
                 stimuli_partition='test', neuron_partition=0, 
                 animals=['magneto.left', 'magneto.right'],
+                neurons='All', batch_size=batch_size, 
+            )
+
+        if 'magneto.var6' in self.hparams.benchmarks:
+            # load manymonkeys test set, animal magneto, var 6
+            benchmarks['magneto.left.var6'] = NeuralDataModule(
+                self.hparams, neuraldataset='manymonkeysval', num_workers=1
+            ).val_dataloader(
+                stimuli_partition='test', neuron_partition=0, 
+                animals=['magneto.left'],
                 neurons='All', batch_size=batch_size, 
             )
 
@@ -586,6 +612,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('--pretrained', dest='pretrained', type=int, default=1)
         parser.add_argument('-adapt', '--adapt_bn_to_stim', dest='adapt_bn_to_stim', type=int, default=1)
         parser.add_argument('-multi_bn', '--multi_bn', dest='multi_bn', type=int, default=0)
+        parser.add_argument('-mix_rate', '--mix_rate', dest='mix_rate', type=float, default=1)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser
