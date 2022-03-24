@@ -140,8 +140,8 @@ class Model_Lightning(LightningModule):
     def train_dataloader(self):
         # pass loaders as a dict. This will create batches like this:
         # {'a': batch from loader_a, 'b': batch from loader_b}
-        # loaders = {key : self.dm[key].train_dataloader() for key in self.dm}
-        loaders = [self.dm[key].train_dataloader() for key in self.dm]
+        loaders = {key : self.dm[key].train_dataloader() for key in self.dm}
+        #loaders = [self.dm[key].train_dataloader() for key in self.dm]
 
         return loaders
 
@@ -167,48 +167,6 @@ class Model_Lightning(LightningModule):
 
    #     return loaders
 
-    def training_step(self, batch, batch_idx):
-        #### refactor -- take a batch, run stimuli, and apply whatever losses to all outcomes at once.
-        losses = []
-        #import pdb; pdb.set_trace()
-
-        for dataloader_idx, batch_ in enumerate(batch):
-            if dataloader_idx == 0:
-                losses.append(
-                    self.loss_weights[dataloader_idx]*self.classification(
-                        batch_, 'train'
-                    )
-                )
-            
-                # for less than even mix of neural data
-                if ch.rand(1) > self.hparams.mix_rate:
-                    return sum(losses)
-
-            # this assumes dataloader_idx is the dataloader for IT. 
-            # fine for now, but need to generalize if we wanted to fit multiple layers.
-            elif (dataloader_idx == 1) & (self.loss_weights[dataloader_idx] != 0):
-                if not self.hparams.adapt_bn_to_stim: self.model.eval()
-                losses.append(
-                    self.loss_weights[dataloader_idx]*self.similarity(
-                        batch_, 'IT', 'train'
-                    )
-                )
-                if not self.hparams.adapt_bn_to_stim: self.model.train()
-
-            elif (dataloader_idx == 2) & (self.loss_weights[dataloader_idx] != 0):
-                if not self.hparams.adapt_bn_to_stim: self.model.eval()
-                losses.append(
-                    self.loss_weights[dataloader_idx]*self.classification(
-                        batch_, 
-                        'train', 
-                        output_inds=[1000, 1008], 
-                        dataset='Stimuli',
-                        adversarial=self.hparams.adv_train_images
-                    )
-                )
-                if not self.hparams.adapt_bn_to_stim: self.model.train()
-
-        return sum(losses)
     
     def validation_step(self, batch, batch_idx, dataloader_idx=None, mode='val'):
         ## need a proper map here for the dataloader_idx
@@ -308,7 +266,7 @@ class Model_Lightning(LightningModule):
 
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
-        if self.hparams.behavior_benchmarks[0] != 'None':
+        if (self.hparams.behavior_benchmarks[0] != 'None') & ~(self.hparams.test):
             self.set_bn(mode='Stimuli')
             self.model.eval()
             benchmark_log = {}
@@ -330,21 +288,7 @@ class Model_Lightning(LightningModule):
                 benchmark_log[benchmark_identifier+'_decoder'] = score
                 if self.hparams.verbose: print(f'layer: {layer}, {benchmark_log}')
                 
-                ## and also from IT fit layer..
-                #layer_ = layer + self.layer_map['IT']
-                #
-                #score = score_model_behavior(
-                #    model_id=model_id,
-                #    model=self.model,
-                #    layer=layer_,
-                #    benchmark=benchmark_identifier,
-                #)
-
-                #benchmark_log[benchmark_identifier+'_IT'] = score
-                #if self.hparams.verbose: print(f'layer: {layer}, {benchmark_log}')
-
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-
 
         gc.collect()
 
@@ -357,29 +301,30 @@ class Model_Lightning(LightningModule):
             if self.hparams.benchmarks[0] == 'All':
                 self.hparams.benchmarks = self.BENCHMARKS
 
-            if 'fneurons.fstimuli' in self.hparams.benchmarks:
-                if self.hparams.verbose:
-                    print('\nvalidating on fitted neurons and fitted stimuli')
+            # these are not really necessary anymore..
+            #if 'fneurons.fstimuli' in self.hparams.benchmarks:
+            #    if self.hparams.verbose:
+            #        print('\nvalidating on fitted neurons and fitted stimuli')
 
-                benchmarks['fneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
-                    stimuli_partition='train', neuron_partition=0, batch_size=batch_size
-                )
-                
-            if 'fneurons.ustimuli' in self.hparams.benchmarks:
-                if self.hparams.verbose:
-                    print('\nvalidating on fitted neurons and unfitted stimuli')
+            #    benchmarks['fneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
+            #        stimuli_partition='train', neuron_partition=0, batch_size=batch_size
+            #    )
+            #    
+            #if 'fneurons.ustimuli' in self.hparams.benchmarks:
+            #    if self.hparams.verbose:
+            #        print('\nvalidating on fitted neurons and unfitted stimuli')
 
-                benchmarks['fneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
-                    stimuli_partition='test', neuron_partition=0, batch_size=batch_size
-                )
+            #    benchmarks['fneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
+            #        stimuli_partition='test', neuron_partition=0, batch_size=batch_size
+            #    )
 
-            if 'uneurons.fstimuli' in self.hparams.benchmarks:
-                if self.hparams.verbose:
-                    print('\nvalidating on unfitted neurons and fitted stimuli')
-                
-                benchmarks['uneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
-                    stimuli_partition='train', neuron_partition=1, batch_size=batch_size
-                )
+            #if 'uneurons.fstimuli' in self.hparams.benchmarks:
+            #    if self.hparams.verbose:
+            #        print('\nvalidating on unfitted neurons and fitted stimuli')
+            #    
+            #    benchmarks['uneurons.fstimuli'] = self.dm['NeuralData'].val_dataloader(
+            #        stimuli_partition='train', neuron_partition=1, batch_size=batch_size
+            #    )
 
             if 'uneurons.ustimuli' in self.hparams.benchmarks:
                 if self.hparams.verbose:
@@ -388,6 +333,10 @@ class Model_Lightning(LightningModule):
                 benchmarks['uneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
                     stimuli_partition='test', neuron_partition=1, batch_size=batch_size
                 )
+        
+        # if test flag, don't load the rest of the benchmarks.
+        if self.hparams.test:
+            return benchmarks
 
         if 'nano.coco' in self.hparams.benchmarks:
             # load manymonkeys test set, animal nano, with COCO stimuli
@@ -454,6 +403,81 @@ class Model_Lightning(LightningModule):
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         return self.validation_step(batch, batch_idx, dataloader_idx=dataloader_idx, mode='val')
 
+    # old train step -- uses two dataloaders for neural fit and stimuli classification
+    #def training_step(self, batch, batch_idx):
+    #    #### refactor -- take a batch, run stimuli, and apply whatever losses to all outcomes at once.
+    #    losses = []
+    #    import pdb; pdb.set_trace()
+
+    #    for dataloader_idx, batch_ in enumerate(batch):
+    #        if dataloader_idx == 0:
+    #            losses.append(
+    #                self.loss_weights[dataloader_idx]*self.classification(
+    #                    batch_, 'train'
+    #                )
+    #            )
+    #        
+    #            # for less than even mix of neural data
+    #            if ch.rand(1) > self.hparams.mix_rate:
+    #                return sum(losses)
+
+    #        # this assumes dataloader_idx is the dataloader for IT. 
+    #        # fine for now, but need to generalize if we wanted to fit multiple layers.
+    #        elif (dataloader_idx == 1) & (self.loss_weights[dataloader_idx] != 0):
+    #            if not self.hparams.adapt_bn_to_stim: self.model.eval()
+    #            losses.append(
+    #                self.loss_weights[dataloader_idx]*self.similarity(
+    #                    batch_, 'IT', 'train'
+    #                )
+    #            )
+    #            if not self.hparams.adapt_bn_to_stim: self.model.train()
+
+    #        elif (dataloader_idx == 2) & (self.loss_weights[dataloader_idx] != 0):
+    #            if not self.hparams.adapt_bn_to_stim: self.model.eval()
+    #            losses.append(
+    #                self.loss_weights[dataloader_idx]*self.classification(
+    #                    batch_, 
+    #                    'train', 
+    #                    output_inds=[1000, 1008], 
+    #                    dataset='Stimuli',
+    #                    adversarial=self.hparams.adv_train_images
+    #                )
+    #            )
+    #            if not self.hparams.adapt_bn_to_stim: self.model.train()
+
+    #    return sum(losses)
+
+    def loss_weights_map(self, loss_name):
+        mapping = {
+            'ImageNet' : self.loss_weights[0],
+            'Neural' : self.loss_weights[1],
+            'StimClass' : self.loss_weights[2]
+        }
+
+        return mapping[loss_name]
+
+    def training_step(self, batch, batch_idx):
+        losses = []
+
+        losses.append(
+            self.loss_weights_map('ImageNet')*self.classification(
+                batch['ImageNet'], 'train'
+            )
+        )
+                
+        # for less than even mix of neural data
+        if ch.rand(1) > self.hparams.mix_rate:
+            return sum(losses)
+
+        neural_loss, stim_class_loss = self.similarity_and_classification(
+            batch['NeuralData'], 'IT', 'train', adversarial=self.hparams.adv_train_images
+        )
+
+        losses.append(self.loss_weights_map('Neural')*neural_loss)
+        losses.append(self.loss_weights_map('StimClass')*stim_class_loss)
+
+        return sum(losses)
+
     def unpack_batch(self, batch, flag):
         X, H, Y = None, None, None
         if flag == 'classification':
@@ -493,6 +517,7 @@ class Model_Lightning(LightningModule):
         loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
 
+        # ??
         if mode == 'train':
             pass
 
@@ -525,16 +550,39 @@ class Model_Lightning(LightningModule):
 
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
-        # for debugging memory issues
-        #t = ch.cuda.get_device_properties(0).total_memory
-        #r = ch.cuda.memory_reserved(0) 
-        #a = ch.cuda.memory_allocated(0)
-        #f = r-a  # free inside reserved
-        #print(f'>>>sim: total {t}, reserved {r}, allocated {a}, free {f}')
-
         return loss
 
+    def similarity_and_classification(self, batch, region, mode, dataset='Stimuli', adversarial=False):
+        self.set_bn(mode=dataset)
+        X, H, Y = self.unpack_batch(batch, flag='similarity')
 
+        if adversarial:
+            # adversarial attack on labels. requires HVM readouts to be trained.
+            X = self.adversaries[f'{mode}_class_adversary'].generate(
+                X, Y, F.cross_entropy, output_inds=[1000,1008]
+            )
+
+        Y_hat = self.model(X)[:, 1000:1008]
+        H_hat = self.regions[region].output
+
+        # this allows to test with a different loss than the train loss.
+        neural_loss_fnc = self.neural_loss if mode == 'train' else self.neural_val_loss
+        neural_loss = neural_loss_fnc(H, H_hat)
+
+        # and compute classification loss  accuracy
+        class_loss = F.cross_entropy(Y_hat, Y)
+        acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
+
+        log = {
+            f'{neural_loss_fnc.name}_{mode}' : neural_loss,
+            f'{dataset}_{mode}_loss' : class_loss,
+            f'{dataset}_{mode}_acc1' : acc1,
+            f'{dataset}_{mode}_acc5' : acc5
+        }
+
+        self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+        return (neural_loss, class_loss)
 
     def configure_optimizers(self):
         param_list, lr = self.parameters(), self.hparams.lr

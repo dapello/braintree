@@ -364,8 +364,6 @@ def list_behavior_benchmarks():
     benchmarks = [
         'HVM640.All_i1',
         'HVM640.All_i1n',
-        'HVM640.3_i1',
-        'HVM640.3_i1n',
         'HVM640.6_i1',
         'HVM640.6_i1n'
     ]

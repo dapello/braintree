@@ -5,5 +5,5 @@ from .neural_datamodule import StimuliDataModule
 DATAMODULES = {
     'ImageNet' : ImagenetDataModule,
     'NeuralData' : NeuralDataModule,
-    'StimuliClassification' : StimuliDataModule
+    #'StimuliClassification' : StimuliDataModule
 }
