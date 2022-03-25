@@ -310,13 +310,13 @@ class Model_Lightning(LightningModule):
             #        stimuli_partition='train', neuron_partition=0, batch_size=batch_size
             #    )
             #    
-            #if 'fneurons.ustimuli' in self.hparams.benchmarks:
-            #    if self.hparams.verbose:
-            #        print('\nvalidating on fitted neurons and unfitted stimuli')
+            if 'fneurons.ustimuli' in self.hparams.benchmarks:
+                if self.hparams.verbose:
+                    print('\nvalidating on fitted neurons and unfitted stimuli')
 
-            #    benchmarks['fneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
-            #        stimuli_partition='test', neuron_partition=0, batch_size=batch_size
-            #    )
+                benchmarks['fneurons.ustimuli'] = self.dm['NeuralData'].val_dataloader(
+                    stimuli_partition='test', neuron_partition=0, batch_size=batch_size
+                )
 
             #if 'uneurons.fstimuli' in self.hparams.benchmarks:
             #    if self.hparams.verbose:
@@ -457,6 +457,12 @@ class Model_Lightning(LightningModule):
         return mapping[loss_name]
 
     def training_step(self, batch, batch_idx):
+        if self.hparams.causal:
+            return self._training_step_causal(batch, batch_idx)
+        else:
+            return self._training_step(batch, batch_idx)
+
+    def _training_step(self, batch, batch_idx):
         losses = []
 
         losses.append(
@@ -474,6 +480,31 @@ class Model_Lightning(LightningModule):
         )
 
         losses.append(self.loss_weights_map('Neural')*neural_loss)
+        losses.append(self.loss_weights_map('StimClass')*stim_class_loss)
+
+        return sum(losses)
+
+    def _training_step_causal(self, batch, batch_idx):
+        # stochastically zero grads for neural similarity. always zero before step 2500, so HVM accuracy is equilabrated
+        if (ch.rand(1) > self.hparams.mix_rate) or (self.global_step < 2500):
+            neural_loss_weight = 0
+        else:
+            neural_loss_weight = self.loss_weights_map('Neural')
+
+
+        losses = []
+
+        losses.append(
+            self.loss_weights_map('ImageNet')*self.classification(
+                batch['ImageNet'], 'train'
+            )
+        )
+
+        neural_loss, stim_class_loss = self.similarity_and_classification(
+            batch['NeuralData'], 'IT', 'train', adversarial=self.hparams.adv_train_images
+        )
+
+        losses.append(neural_loss_weight*neural_loss)
         losses.append(self.loss_weights_map('StimClass')*stim_class_loss)
 
         return sum(losses)
@@ -661,6 +692,7 @@ class Model_Lightning(LightningModule):
         parser.add_argument('-adapt', '--adapt_bn_to_stim', dest='adapt_bn_to_stim', type=int, default=1)
         parser.add_argument('-multi_bn', '--multi_bn', dest='multi_bn', type=int, default=0)
         parser.add_argument('-mix_rate', '--mix_rate', dest='mix_rate', type=float, default=1)
+        parser.add_argument('-causal', '--causal', dest='causal', type=int, default=0)
         parser.add_argument('--record-time', dest='record_time', action='store_true')
         
         return parser
