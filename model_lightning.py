@@ -659,7 +659,7 @@ class Model_Lightning(LightningModule):
         kwargs = dict_remove_none(kwargs) if arch in custom_models.__dict__ else {} 
         print(f'Using pretrained model: {pretrained}')
         model = model_arch(pretrained=pretrained, *args, **kwargs)
-        model = add_normalization(model)
+        model = add_normalization(model, normalization=self.layer_map['normalization'])
         model = add_outputs(model, out_name=self.layer_map['output'], n_outputs=8)
         return model
 
