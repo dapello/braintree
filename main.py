@@ -130,7 +130,7 @@ def get_args(*args):
                                choices=['None'] + list_brainscore_benchmarks(),
                                help='which metrics to collect at the end of the epoch')
     parent_parser.add_argument('-BH', '--behanvior_benchmarks', dest='behavior_benchmarks',  nargs='*', 
-                               default=list_behavior_benchmarks(),
+                               default=['None'],
                                choices=['None'] + list_behavior_benchmarks(),
                                help='which behavior metrics to collect at the end of the epoch')
     parent_parser.add_argument('--fit_animals', dest='fit_animals',  nargs='*', default=['All'],

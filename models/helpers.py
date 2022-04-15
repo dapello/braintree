@@ -36,7 +36,8 @@ layer_maps = {
         'V2' : None,
         'V4' : None,
         'IT' : 'layer4.0',
-        'decoder' : 'avgpool'
+        'decoder' : 'avgpool',
+        'output' : 'fc'
     },
     'cornet_s' : {
         'V1' : 'V1.output',
