@@ -4,6 +4,10 @@ from copy import deepcopy
 
 layer_maps = {
     'efficientnet_b0' : {
+        'normalization' : {
+            'mean' : [0.485, 0.456, 0.406], 
+            'std' : [0.229, 0.224, 0.225]
+        }, 
         'V1' : None,
         'V2' : None,
         'V4' : None,
@@ -11,6 +15,10 @@ layer_maps = {
         'decoder' : '_blocks.15',
     },
     'mobilenet_v2' : {
+        'normalization' : {
+            'mean' : [0.485, 0.456, 0.406], 
+            'std' : [0.229, 0.224, 0.225]
+        },
         'V1' : None,
         'V2' : None,
         'V4' : None,
@@ -18,6 +26,10 @@ layer_maps = {
         'decoder' : 'classifier'
     },
     'mobilenet_v3_large' : {
+        'normalization' : {
+            'mean' : [0.485, 0.456, 0.406], 
+            'std' : [0.229, 0.224, 0.225]
+        },
         'V1' : None,
         'V2' : None,
         'V4' : None,
@@ -25,6 +37,10 @@ layer_maps = {
         'decoder' : 'avgpool'
     },
     'resnet18' : {
+        'normalization' : {
+            'mean' : [0.485, 0.456, 0.406], 
+            'std' : [0.229, 0.224, 0.225]
+        },
         'V1' : None,
         'V2' : None,
         'V4' : None,
@@ -32,6 +48,10 @@ layer_maps = {
         'decoder' : 'avgpool'
     },
     'resnet50' : {
+        'normalization' : {
+            'mean' : [0.485, 0.456, 0.406], 
+            'std' : [0.229, 0.224, 0.225]
+        },
         'V1' : None,
         'V2' : None,
         'V4' : None,
@@ -39,6 +59,10 @@ layer_maps = {
         'decoder' : 'avgpool'
     },
     'cornet_s' : {
+        'normalization' : {
+            'mean' : [0.485, 0.456, 0.406], 
+            'std' : [0.229, 0.224, 0.225]
+        },
         'V1' : 'V1.output',
         'V2' : 'V2.output',
         'V4' : 'V4.output',
@@ -48,21 +72,25 @@ layer_maps = {
         'output' : 'decoder.linear'
     },
     'vonecornet_s' : {
-        'V1' : 'V1.output',
-        'V2' : 'V2.output',
-        'V4' : 'V4.output',
-        'IT' : 'IT.output',
+        'normalization' : {
+            'mean' : [0.5, 0.5, 0.5], 
+            'std' : [0.5, 0.5, 0.5]
+        },
+        'V1' : 'model.V1.output',
+        'V2' : 'model.V2.output',
+        'V4' : 'model.V4.output',
+        'IT' : 'model.IT.output',
         'IT_temp' : {'time_steps' : 2, 'output_step' : 1},
-        'decoder' : 'decoder.avgpool',
-        'output' : 'decoder.linear'
+        'decoder' : 'model.decoder.avgpool',
+        'output' : 'model.decoder.linear'
     },
 }
 
 class Normalize(nn.Module):
-    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    def __init__(self, normalization):
         super(Normalize, self).__init__()
-        self.mean = ch.tensor(mean).reshape(3,1,1)#.cuda()
-        self.std = ch.tensor(std).reshape(3,1,1)#.cuda()
+        self.mean = ch.tensor(normalization['mean']).reshape(3,1,1)#.cuda()
+        self.std = ch.tensor(normalization['std']).reshape(3,1,1)#.cuda()
 
     def forward(self, x):
         x = x - self.mean.type_as(x)
