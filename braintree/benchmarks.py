@@ -32,12 +32,15 @@ def cornet_s_brainmodel(identifier, model, image_size):
     wrapper = TemporalPytorchWrapper(identifier=identifier, model=model[1].module, preprocessing=preprocessing, separate_time=True)
     wrapper.image_size = image_size
 
+    layers = ['V1.output-t0'] + [f'{area}.output-t{timestep}'
+        for area, timesteps in [('V2', range(2)), ('V4', range(4)), ('IT', range(2))]
+        for timestep in timesteps
+    ] + ['decoder.avgpool-t0']
+
+    if 'vone' in identifier:
+        layers = ['model.' + layer for layer in layers]
     return CORnetCommitment(identifier=identifier, activations_model=wrapper,
-                            layers=['V1.output-t0'] +
-                                   [f'{area}.output-t{timestep}'
-                                    for area, timesteps in [('V2', range(2)), ('V4', range(4)), ('IT', range(2))]
-                                    for timestep in timesteps] +
-                                   ['decoder.avgpool-t0'],
+                            layers=layers,
                             time_mapping=_build_time_mappings(time_mappings))
 
 def brain_wrap_model(identifier, model, layers, image_size):
