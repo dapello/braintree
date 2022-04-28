@@ -13,7 +13,8 @@ import torch.optim.lr_scheduler as lr_scheduler
 import pytorch_lightning as pl
 from pytorch_lightning.core import LightningModule
 
-from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment
+#from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment, LogCenteredKernelAlignment0
+from braintree.losses import NEURAL_LOSSES
 from braintree.benchmarks import score_model, score_model_behavior
 from braintree.adversary import Adversary
 from datamodules.neural_datamodule import NeuralDataModule
@@ -35,10 +36,7 @@ MODEL_NAMES = sorted(
 
 class Model_Lightning(LightningModule):
     
-    NEURAL_LOSSES = {
-        'CKA' : CenteredKernelAlignment,
-        'logCKA' : LogCenteredKernelAlignment,
-    }
+    NEURAL_LOSSES = NEURAL_LOSSES
 
     # f = fitted, u = unfitted. ie fnuerons.ustimuli => run benchmark on fitted neurons and unfitted stimuli
     # this should not be called BENCHMARKS, to be consistent with brainscore terminology. PARTITION maybe?

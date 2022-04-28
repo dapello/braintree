@@ -3,12 +3,11 @@ from torch import Tensor
 from torch.nn import Module
 
 
-class LogCenteredKernelAlignment(Module):
-
-    name = 'logCKA'
-
-    def __init__(self, device='gpu'):
-        super(LogCenteredKernelAlignment, self).__init__()
+class _CenteredKernelAlignment(Module):
+    def __init__(self, fnc, name, device='gpu'):
+        super(_CenteredKernelAlignment, self).__init__()
+        self.fnc = fnc
+        self.name = name
         self.device=device
             
     def forward(self, X: Tensor, Y: Tensor) -> Tensor:
@@ -23,30 +22,34 @@ class LogCenteredKernelAlignment(Module):
         X, Y = X.view(X.shape[0], -1), Y.view(Y.shape[0], -1)
         X = X - X.mean(dim=0)
         Y = Y - Y.mean(dim=0)
-        return ch.log(1 - CKA(X, Y))
+        #return ch.log(self.start - CKA(X, Y))
+        return self.fnc(CKA(X, Y))
 
-class CenteredKernelAlignment(Module):
+def LogCenteredKernelAlignment():
+    def fnc(X):
+        return ch.log(1 - X)
+    return _CenteredKernelAlignment(fnc=fnc, name='logCKA')
 
-    name = 'CKA'
+def FlipLogCenteredKernelAlignment():
+    def fnc(X):
+        return -ch.log(1 - X)
+    return _CenteredKernelAlignment(fnc=fnc, name='fliplogCKA')
 
-    def __init__(self, device='gpu'):
-        super(CenteredKernelAlignment, self).__init__()
-        self.device=device
-            
-    def forward(self, X: Tensor, Y: Tensor) -> Tensor:
-        if self.device == 'gpu':
-            X = X.cuda()
-            Y = Y.cuda()
-        elif self.device == 'cpu':
-            X = X.cpu()
-            Y = Y.cpu()
+def CenteredKernelAlignment():
+    def fnc(X):
+        return 1 - X
+    return _CenteredKernelAlignment(fnc=fnc, name='CKA')
 
-        assert X.shape[0] == Y.shape[0]
-        X, Y = X.view(X.shape[0], -1), Y.view(Y.shape[0], -1)
-        X = X - X.mean(dim=0)
-        Y = Y - Y.mean(dim=0)
-        return 1 - CKA(X, Y)
-    
+def FlipCenteredKernelAlignment():
+    def fnc(X):
+        return X
+    return _CenteredKernelAlignment(fnc=fnc, name='flipCKA')
+
+def LogCenteredKernelAlignment0():
+    def fnc(X):
+        return - ch.log(X)
+    return _CenteredKernelAlignment(fnc=fnc, name='logCKA0')
+
 def CKA(X: Tensor, Y: Tensor) -> Tensor:
     return frobdot(X,Y)**2 / (frobdot(X,X)*frobdot(Y,Y))
 
@@ -123,3 +126,13 @@ def linear_CKA(X, Y):
     import pdb; pdb.set_trace()
 
     return hsic / (var1 * var2)
+
+
+
+NEURAL_LOSSES = {
+    'CKA' : CenteredKernelAlignment,
+    'flipCKA' : FlipCenteredKernelAlignment,
+    'logCKA' : LogCenteredKernelAlignment,
+    'fliplogCKA' : FlipLogCenteredKernelAlignment,
+    'logCKA0' : LogCenteredKernelAlignment0
+}
