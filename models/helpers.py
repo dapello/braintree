@@ -45,7 +45,8 @@ layer_maps = {
         'V2' : None,
         'V4' : None,
         'IT' : 'layer4.1',
-        'decoder' : 'avgpool'
+        'decoder' : 'avgpool',
+        'output' : 'fc'
     },
     'resnet50' : {
         'normalization' : {
