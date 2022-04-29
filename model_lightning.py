@@ -260,6 +260,9 @@ class Model_Lightning(LightningModule):
                 )
 
                 benchmark_log[benchmark_identifier] = score.values[0]
+                # also collect raw accuracy from i2n benchmarks. this requires modified brainscore which reports P.
+                if 'i2n' in benchmark_identifier:
+                    benchmark_log[benchmark_identifier+'_acc'] = score.acc
                 if self.hparams.verbose: print(f'layers: {layers}, {benchmark_log}')
 
             self.log_dict(benchmark_log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
