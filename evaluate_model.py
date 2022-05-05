@@ -13,11 +13,14 @@ from datamodules.neural_datamodule import NeuralDataModule
 from models.helpers import layer_maps, add_normalization, add_outputs, Mask
 
 def main(args):
+    # get all the model weight paths in a folder (searches recursively)
     weight_paths = [y for x in os.walk(f'logs/{args.logdir}') for y in glob.glob(os.path.join(x[0], 'epoch*.ckpt'))]
-    for weight_path in weight_paths:
-        do_the_thing(weight_path, args)
 
-def do_the_thing(weight_path, args):
+    # loop over models, evaluating each one with the specified attack params in args
+    for weight_path in weight_paths:
+        load_and_eval_model(weight_path, args)
+
+def load_and_eval_model(weight_path, args):
     # load model
     model = load_model(weight_path, args)
     
@@ -49,6 +52,9 @@ def evaluate(model, X, Y):
     return accuracy
 
 def load_dataset(args):
+    # this loads datasets that I've built custom DataModules for.. use HVM_var6 for now.
+    # writes some default parameters that the NeuralDataModule requires
+    # some of these might need to be adapted; ie 320 is correct for HVM but not COCO.
     args.image_size = 224
     args.dims = (3, 224, 224)
     args.num_workers = 1
