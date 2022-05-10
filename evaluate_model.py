@@ -14,7 +14,8 @@ from models.helpers import layer_maps, add_normalization, add_outputs, Mask
 
 def main(args):
     # get all the model weight paths in a folder (searches recursively)
-    weight_paths = [y for x in os.walk(f'logs/{args.logdir}') for y in glob.glob(os.path.join(x[0], 'epoch*.ckpt'))]
+    weight_paths = [y for x in os.walk(f'{args.logdir}') for y in glob.glob(os.path.join(x[0], 'epoch*.ckpt'))]
+    import pdb; pdb.set_trace()
 
     # loop over models, evaluating each one with the specified attack params in args
     for weight_path in weight_paths:
@@ -111,7 +112,8 @@ def load_adversary(args, model):
     
 def load_model(path_to_weights, args):
     # load the model architecture with the normalization preprocessor
-    model = add_normalization(cornet_s(pretrained=False))
+    model = cornet_s(pretrained=False)
+    model = add_normalization(model, normalization=layer_maps['cornet_s']['normalization'])
     model = add_outputs(model, out_name='decoder.linear', n_outputs=8)
 
     # load weights and strip pesky 'model.' prefix
@@ -135,6 +137,7 @@ def ART_wrap_model(model):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.01)
 
+    # models handle input normalization etc internally.
     mean = np.array([0, 0, 0]).reshape((3, 1, 1))
     std = np.array([1, 1, 1]).reshape((3, 1, 1))
     
