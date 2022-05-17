@@ -15,7 +15,6 @@ from models.helpers import layer_maps, add_normalization, add_outputs, Mask
 def main(args):
     # get all the model weight paths in a folder (searches recursively)
     weight_paths = [y for x in os.walk(f'{args.logdir}') for y in glob.glob(os.path.join(x[0], 'epoch*.ckpt'))]
-    import pdb; pdb.set_trace()
 
     # loop over models, evaluating each one with the specified attack params in args
     for weight_path in weight_paths:
@@ -82,6 +81,14 @@ def load_dataset(args):
             stimuli_partition='test', neuron_partition=0, 
             animals=['magneto.left', 'magneto.right'],
             neurons='All', batch_size=320, 
+        )
+    elif args.dataset == 'COCO':
+        loader = NeuralDataModule(
+            args, neuraldataset='COCO', num_workers=1
+        ).val_dataloader(
+            stimuli_partition='test', neuron_partition=0, 
+            animals=['nano.left'],
+            neurons='All', batch_size=200, 
         )
 
     for batch in loader:
