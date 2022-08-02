@@ -3,7 +3,7 @@
 
 ## What is this?
 
-An attempt to fit neural networks to IT neural recording data.
+This is the code used to create all models and plots in the anonymous neurips submission: "Aligning Model and Primate Late Stage Visual Representations Improves Model-to-Human Behavioral Alignment and Adversarial Robustness"
 
 ## Example model training round to produce an IT-aligned CORnet-S:
 
@@ -16,4 +16,4 @@ Note, you will need to download and situate the sachimajajhong dataset and the m
 
 More training scripts to recreate all model conditions and paper results can be found in the array_final*.sbatch files. You will need to install brainscore for these training scripts to work!
 
-This code will be updated and further documented in the near future.
+This code will be updated with further documented in the near future.
