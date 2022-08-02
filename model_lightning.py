@@ -16,6 +16,7 @@ from pytorch_lightning.core import LightningModule
 #from braintree.losses import CenteredKernelAlignment, LogCenteredKernelAlignment, LogCenteredKernelAlignment0
 from braintree.losses import NEURAL_LOSSES
 from braintree.benchmarks import score_model, score_model_behavior
+from braintree.metrics import dimension_analysis
 from braintree.adversary import Adversary
 from datamodules.neural_datamodule import NeuralDataModule
 from models.helpers import layer_maps, add_normalization, add_outputs, Hook, copy_bns, paste_bns
@@ -604,12 +605,16 @@ class Model_Lightning(LightningModule):
         # and compute classification loss  accuracy
         class_loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
+        EVD90, PR, features = self.__dimension_analysis(H_hat)
 
         log = {
             f'{neural_loss_fnc.name}_{mode}' : neural_loss,
             f'{dataset}_{mode}_loss' : class_loss,
             f'{dataset}_{mode}_acc1' : acc1,
-            f'{dataset}_{mode}_acc5' : acc5
+            f'{dataset}_{mode}_acc5' : acc5,
+            f'{dataset}_{mode}_EVD90' : EVD90,
+            f'{dataset}_{mode}_PR' : PR,
+            f'{dataset}_{mode}_features' : features
         }
 
         self.log_dict(log, on_step=False, on_epoch=True, prog_bar=True, logger=True)
@@ -649,6 +654,14 @@ class Model_Lightning(LightningModule):
             total = output.shape[0]
             res = [correct[:k].sum().item()/total for k in topk]
             return res
+
+    @staticmethod
+    def __dimension_analysis(X):
+        """Computes EVD90 and Participation Ratio for stimuli x feature matrix X"""
+        with ch.no_grad():
+            X = X.reshape(X.shape[0], -1).cpu().numpy().astype('float32')
+            EVD90, PR, features = dimension_analysis(X)
+            return EVD90, PR, features 
 
     def get_model(self, arch, pretrained, *args, **kwargs): 
         """gets a model and prepends a normalization layer"""
