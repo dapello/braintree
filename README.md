@@ -5,6 +5,8 @@
 
 This is the code used to create all models and plots in the anonymous neurips submission: "Aligning Model and Primate Late Stage Visual Representations Improves Model-to-Human Behavioral Alignment and Adversarial Robustness"
 
+Currently this repo is being cleaned up and modified to include pretrained models and data for training and validation.
+
 ## Example model training round to produce an IT-aligned CORnet-S:
 
 ```
