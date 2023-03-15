@@ -605,7 +605,8 @@ class Model_Lightning(LightningModule):
         # and compute classification loss  accuracy
         class_loss = F.cross_entropy(Y_hat, Y)
         acc1, acc5 = self.__accuracy(Y_hat, Y, topk=(1,5))
-        EVD90, PR, features = self.__dimension_analysis(H_hat)
+        # added during a rebuttal period for 1 off experiment -- makes training very slow!
+        # EVD90, PR, features = self.__dimension_analysis(H_hat)
 
         log = {
             f'{neural_loss_fnc.name}_{mode}' : neural_loss,
